@@ -667,12 +667,12 @@ function drawFooter() {
   ctx.font = font(400, 12); ctx.fillStyle = C.ink2; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   const syn = D.meta && D.meta.synthetic ? `${V.synthetic}  ·  ` : '';
   const CTX = window.CONTRACTS;
-  let tail = `${footCalls.length - infraHops} ${V.unmatched}: ${V.noContractIndex}`;
+  let tail = V.contractFooter ? `, ${footCalls.length - infraHops} ${V.unmatched}: ${V.noContractIndex}` : '';
   if (CTX) {
     const st = footCalls.filter((c) => !nodes.get(c.to).inferred).map((c) => (CTX.bySpan[c.callee.spanId] || CTX.bySpan[c.span.spanId] || {}).state);
-    tail = `${st.filter((x) => x === 'matched' || x === 'fallback').length} ${V.matched} to ${V.contracts}, ${st.filter((x) => x !== 'matched' && x !== 'fallback').length} ${V.unmatched}`;
+    tail = `, ${st.filter((x) => x === 'matched' || x === 'fallback').length} ${V.matched} to ${V.contracts}, ${st.filter((x) => x !== 'matched' && x !== 'fallback').length} ${V.unmatched}`;
   }
-  ctx.fillText(`${syn}${spans.length} spans  ·  ${footCalls.length} ${V.hopNounPlural} (${infraHops} ${V.infrastructure}, ${tail})  ·  ${V.renderedLocally}`, 40, 872);
+  ctx.fillText(`${syn}${spans.length} spans  ·  ${footCalls.length} ${V.hopNounPlural} (${infraHops} ${V.infrastructure}${tail})  ·  ${V.renderedLocally}`, 40, 872);
 }
 function renderAt(t) {
   const tm = traceMsAt(t);
@@ -895,7 +895,7 @@ function renderPanel() {
     contractSection(s) +
     `<h3>${V.attributes}${m.client && m.server ? ` · ${V.serverSpan}` : ''}</h3>` + attrGroups(s) +
     (m.client && m.server && m.client.attrs ? `<details class="client-attrs"><summary>${V.client} ${V.span} ${V.attributes.toLowerCase()} (${esc(m.client.service)})</summary>${attrGroups(m.client)}</details>` : '') +
-    `<p class="muted">${D.meta && D.meta.redacted ? `${D.meta.redacted} ${V.redactedAcross}` : V.sensitiveRedacted}</p>` +
+    `<p class="muted">${D.meta && D.meta.redacted ? `${D.meta.redacted} ${V.redactedAcross}` : V.sensitiveRedacted}${D.meta && D.meta.scrub ? (D.meta.scrub.level === 'off' ? ` <b>${V.scrubOff}</b>` : D.meta.scrub.values ? ` ${D.meta.scrub.values} ${V.scrubbedValues} (${esc(D.meta.scrub.level)}).` : '') : ''}</p>` +
     `<h3>${V.children} (${ch.length})</h3>${ch.length ? '<ul>' + ch.map((k) => `<li>${spanLink(k)}</li>`).join('') + '</ul>' : `<p class="muted">${V.none}</p>`}` +
     `<p class="muted mono">${m.client ? `client span ${esc(m.client.spanId)}<br>` : ''}${m.server ? `server span ${esc(m.server.spanId)}` : m.client ? '' : `span ${esc(s.spanId)}`}</p>` +
     `</div>`;

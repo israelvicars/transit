@@ -22,8 +22,9 @@ Every script checks its own prerequisites the first time (`<skill>/../../core/se
 `.transit-cache/setup.json`. It reuses before it downloads:
 
 - **Browser:** Playwright's cached build, then any cached Chromium, then system Chrome/Edge. Only if none launches does it download `chromium-headless-shell` (~100 MB, announced first).
-- **ffmpeg:** ffmpeg on PATH or in Homebrew paths; otherwise `brew install ffmpeg` on macOS, or opt-in `TRANSIT_FFMPEG_STATIC=1`.
-- **npm deps:** `playwright-core` only.
+- **ffmpeg:** the pinned `ffmpeg-static` dependency (in package.json and the lockfile), then `TRANSIT_FFMPEG`, then ffmpeg on PATH. ffprobe is not needed. Transit never installs system packages: if ffmpeg is missing it prints the command (`npm rebuild ffmpeg-static`, or a system install) and stops.
+- **npm deps:** `playwright-core` and `ffmpeg-static`, project-local in node_modules. Needs Node 20+.
+- Pinned ffmpeg makes MP4/GIF bytes reproducible across machines; a different ffmpeg (`TRANSIT_FFMPEG`) encodes the same frames to different bytes.
 
 `node <skill>/../../core/setup.mjs --check` reports what would be used or downloaded and changes nothing. Tell the user before a download if they care about bandwidth. Other switches:
 
@@ -58,6 +59,11 @@ Every script checks its own prerequisites the first time (`<skill>/../../core/se
 - Never upload the trace or the render anywhere unless the user asks.
 - Span attributes can contain PII. Default redaction drops user/email/token/auth/card-like keys;
   add more with `--redact key1,key2`. Payloads are never shown (tracers don't store them).
+- Values are scrubbed too, by default (safe to share): emails, bearer/JWT/known-prefix tokens, `password=`/`api_key=`
+  style secrets, URL credentials and query strings, long hex/base64 secrets, UUIDs, home-directory names and AWS
+  account ids in ARNs, across service and span names, status messages and URLs. `--strict` (alias `--share`) also
+  removes IPs, internal host names, long numeric ids and all but a minimal attribute set. `--keep-uuids` keeps UUIDs;
+  `--no-scrub` turns it off for local debugging only (the page then says not to share it).
 - Useful flags: `--slow-ms N`, `--ms-per-sec N`, `--target-seconds 9`, `--trace-id ID`, `--format otlp|datadog|datadog-v2|internal`.
 
 Details: `references/adapters.md`, `references/config.md`, `references/extractors.md`.

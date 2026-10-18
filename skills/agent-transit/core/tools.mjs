@@ -6,6 +6,7 @@
 // browsers or builds (system Chrome vs Playwright's headless shell, or another version) can rasterize text
 // slightly differently, so hashes are only comparable per machine+browser.
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,5 +27,18 @@ export async function launchBrowser(opts = {}) {
   return chromium.launch({ ...launchOptions(), ...opts });
 }
 
-export const ffmpegBin = () => marker().ffmpeg?.ffmpeg || 'ffmpeg';
-export const ffprobeBin = () => marker().ffmpeg?.ffprobe || 'ffprobe';
+export const ffmpegBin = () => process.env.TRANSIT_FFMPEG || marker().ffmpeg?.ffmpeg || 'ffmpeg';
+
+// Runs ffmpeg with an argument array (never a shell) and returns stdout + stderr as text, even when it exits non-zero.
+export function ffmpegText(args) {
+  const r = spawnSync(ffmpegBin(), ['-hide_banner', ...args], { encoding: 'utf8', maxBuffer: 1 << 26 });
+  if (r.error) throw new Error(`cannot run ffmpeg (${ffmpegBin()}): ${r.error.code || r.error.message}`);
+  return (r.stdout || '') + (r.stderr || '');
+}
+// Decoded video frame count from ffmpeg's own progress line (replaces ffprobe -count_frames).
+export function countFrames(file) {
+  const out = ffmpegText(['-nostdin', '-i', file, '-map', '0:v:0', '-f', 'null', '-']);
+  const all = [...out.matchAll(/frame=\s*(\d+)/g)];
+  if (!all.length) throw new Error(`ffmpeg reported no frames for ${file}`);
+  return Number(all[all.length - 1][1]);
+}

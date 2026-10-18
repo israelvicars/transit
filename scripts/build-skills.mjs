@@ -12,7 +12,7 @@ const names = readdirSync(SRC, { withFileTypes: true })
   .filter((entry) => entry.isDirectory() && existsSync(join(SRC, entry.name, 'SKILL.md')))
   .map((entry) => entry.name)
   .sort();
-const packageVersion = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).dependencies['playwright-core'];
+const rootPkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));   // skills get the same pinned deps, engines and script approvals
 
 function walk(dir) {
   const files = [];
@@ -62,7 +62,7 @@ function expected(name) {
   const readme = join(source, 'README.md');
   if (existsSync(readme)) addFile(files, outRoot, readme, join(outRoot, 'README.md'));
   files.set('package.json', Buffer.from(JSON.stringify({
-    name, private: true, type: 'module', dependencies: { 'playwright-core': packageVersion }
+    name, private: true, type: 'module', engines: rootPkg.engines, dependencies: rootPkg.dependencies, allowScripts: rootPkg.allowScripts
   }, null, 2) + '\n'));
   addFile(files, outRoot, join(ROOT, 'LICENSE'), join(outRoot, 'LICENSE'));
 

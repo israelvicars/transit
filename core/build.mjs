@@ -4,6 +4,7 @@
 // usage: node core/build.mjs <trace.json> [--out out/transit.html] [--format otlp|datadog|datadog-v2|internal]
 //        [--trace-id ID] [--title "..."] [--subtitle "..."] [--slow-ms N] [--ms-per-sec N]
 //        [--target-seconds 9] [--redact key1,key2] [--no-default-redact]
+//        [--strict | --share] [--keep-uuids] [--keep-ci-titles] [--no-scrub]   (value scrubbing, see core/scrub.mjs)
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,11 +14,13 @@ import { existsSync } from 'node:fs';
 import { matchTrace } from '../src/request-transit/contracts/match.mjs';
 import { resolveVocab } from './vocab.mjs';
 import { compressGaps, DEFAULT_MAX_GAP_MS } from './gaps.mjs';
+import { scrubTrace, scrubLevel } from './scrub.mjs';
+import { parseArgs, runCli, UserError } from './cli.mjs';
 export const DEFAULT_INDEX = '.transit-cache/contracts/index.json';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // attribute keys dropped before anything is rendered (span attributes can carry PII)
-export const DEFAULT_REDACT = /(^|[._])(user|email|phone|token|auth|authorization|password|passwd|secret|cookie|session|card|ssn)([._]|$)|^(client|user)\.(address|ip)$|^enduser\./i;
+export const DEFAULT_REDACT = /(^|[._-])(user|email|phone|token|auth|authorization|password|passwd|secret|cookie|set-cookie|session|card|ssn|credentials?|jwt|bearer|api[_-]?key|apikey|private[_-]?key|access[_-]?key)([._-]|$)|^(client|user)\.(address|ip)$|^enduser\./i;
 
 export function redact(trace, keys = [], useDefault = true) {
   const set = new Set(keys);
@@ -46,16 +49,33 @@ export function splitSingleService(trace) {
   return true;
 }
 
-export function build(file, opt = {}) {
-  const input = readFileSync(file, 'utf8');
-  let doc;
-  try { doc = parseJsonSafe(input); }
-  catch (err) {
-    doc = input.split(/\r?\n/).filter(Boolean).map((line) => parseJsonSafe(line));
+// JSON, or JSON Lines (agent sessions); anything else is a UserError with the reason, never a stack trace
+export function readInput(file) {
+  let input;
+  try { input = readFileSync(file, 'utf8'); }
+  catch (e) { throw new UserError(e.code === 'ENOENT' ? `no such file: ${file}` : e.code === 'EISDIR' ? `${file} is a directory, expected a trace file` : `cannot read ${file}: ${e.code || e.message}`); }
+  if (!input.trim()) throw new UserError(`${file} is empty; expected a trace export (JSON) or an agent session (JSON Lines)`);
+  try { return parseJsonSafe(input); }
+  catch (jsonErr) {
+    const lines = input.split(/\r?\n/).map((l, i) => [l, i + 1]).filter(([l]) => l.trim());
+    if (lines.length < 2) throw new UserError(`${file} is not valid JSON (${jsonErr.message.replace(/\s+/g, ' ').slice(0, 160)})`);
+    return lines.map(([l, n]) => { try { return parseJsonSafe(l); } catch (e) { throw new UserError(`${file} is neither JSON nor JSON Lines: line ${n} does not parse (${e.message.replace(/\s+/g, ' ').slice(0, 160)})`); } });
   }
-  const adapter = pickAdapter(doc, opt.format);
-  const trace = adapter.normalize(doc, { format: adapter.format, traceId: opt['trace-id'], showArgs: !!opt['show-args'], maxSteps: opt['max-steps'] != null ? Number(opt['max-steps']) : undefined });
+}
+
+export function build(file, opt = {}) {
+  const doc = readInput(file);
+  if (doc === null || typeof doc !== 'object') throw new UserError(`${file} holds a JSON ${doc === null ? 'null' : typeof doc}, not a trace; see the supported formats in src/request-transit/SKILL.md`);
+  let adapter, trace;
+  try {
+    adapter = pickAdapter(doc, opt.format);
+    trace = adapter.normalize(doc, { format: adapter.format, traceId: opt['trace-id'], showArgs: !!opt['show-args'], maxSteps: opt['max-steps'] != null ? Number(opt['max-steps']) : undefined });
+  } catch (e) {
+    if (e instanceof UserError) throw e;
+    throw new UserError(`could not read ${file} as a trace: ${e.message}`);
+  }
   redact(trace, opt.redact ? String(opt.redact).split(',') : [], !opt['no-default-redact']);
+  scrubTrace(trace, scrubLevel(opt), adapter.format);
   const vizOpts = {};
   if (!['gh-actions', 'claude-code', 'codex', 'cursor'].includes(adapter.format)) splitSingleService(trace);
   // agent sessions and CI runs: shorten idle gaps (--max-gap-ms N, 0 or --no-compress-gaps to keep wall time)
@@ -65,9 +85,11 @@ export function build(file, opt = {}) {
     if (gaps) {
       trace.meta.gaps = gaps;
       trace.meta.warnings.push(`shortened ${gaps.count} idle gap(s) longer than ${gaps.maxGapMs / 1000} s (${Math.round(gaps.removedMs / 1000)} s of wall time cut); pass --max-gap-ms 0 for wall time`);
-      vizOpts.gapNote = `${gaps.count} idle gap${gaps.count === 1 ? '' : 's'} shortened`;
+      vizOpts.gapNote = `${gaps.count} idle gap${gaps.count === 1 ? '' : 's'} shortened, not wall-clock`;
     }
   }
+  // a large CI run keeps only failed/cancelled steps as stations: say so on the map, not just in the console
+  if (adapter.format === 'gh-actions' && trace.meta.warnings.some((w) => w.startsWith('large run:'))) vizOpts.gapNote = [vizOpts.gapNote, 'failed steps only'].filter(Boolean).join('  ·  ');
   if (opt.title) vizOpts.title = opt.title;
   if (opt.subtitle) vizOpts.subtitle = opt.subtitle;
   if (opt['slow-ms']) vizOpts.slowMs = Number(opt['slow-ms']);
@@ -93,18 +115,12 @@ export function build(file, opt = {}) {
   return { out, trace, contracts };
 }
 
-if (process.argv[1] && process.argv[1].endsWith('/build.mjs')) {
+if (process.argv[1] && process.argv[1].endsWith('/build.mjs')) await runCli(async () => {
   await (await import('./setup.mjs')).ensureSetup({ need: [] });   // node version only; the HTML needs no deps
-  const argv = process.argv.slice(2); const opt = {}; const pos = [];
-  for (let i = 0; i < argv.length; i++) {
-    if (!argv[i].startsWith('--')) { pos.push(argv[i]); continue; }
-    const k = argv[i].slice(2);
-    if (k.startsWith('no-')) opt[k] = true;
-    else if ((k === 'contracts' || k === 'show-args') && (!argv[i + 1] || argv[i + 1].startsWith('--'))) opt[k] = true;
-    else opt[k] = argv[++i];
-  }
-  if (!pos[0]) { console.error('usage: node core/build.mjs <trace.json> [--out out/transit.html] [--title ...]'); process.exit(1); }
+  const { opt, pos } = parseArgs(process.argv.slice(2));
+  if (!pos[0]) throw new UserError('usage: node core/build.mjs <trace.json> [--out out/transit.html] [--title ...] [--strict]');
   const { out, trace, contracts } = build(pos[0], opt);
   for (const w of trace.meta.warnings) console.error('warning:', w);
-  console.log(`wrote ${out} (${trace.spans.length} spans, ${trace.meta.format}${trace.meta.synthetic ? ', synthetic' : ''}, ${trace.meta.redacted} attrs redacted${contracts ? `, contracts: ${Object.values(contracts.bySpan).filter((m) => m.state === 'matched' || m.state === 'fallback').length} matched / ${Object.values(contracts.bySpan).filter((m) => m.state === 'unmatched').length} unmatched / ${Object.values(contracts.bySpan).filter((m) => m.state === 'infra').length} infra` : ''})`);
-}
+  const sc = trace.meta.scrub;
+  console.log(`wrote ${out} (${trace.spans.length} spans, ${trace.meta.format}${trace.meta.synthetic ? ', synthetic' : ''}, ${trace.meta.redacted} attrs redacted, ${sc.level === 'off' ? 'value scrubbing OFF' : `${sc.values} values scrubbed (${sc.level})`}${contracts ? `, contracts: ${Object.values(contracts.bySpan).filter((m) => m.state === 'matched' || m.state === 'fallback').length} matched / ${Object.values(contracts.bySpan).filter((m) => m.state === 'unmatched').length} unmatched / ${Object.values(contracts.bySpan).filter((m) => m.state === 'infra').length} infra` : ''})`);
+});

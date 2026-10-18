@@ -5,8 +5,8 @@
 //   - the page's requestAnimationFrame loop is frozen during capture, so a preview loop
 //     cannot overwrite the frame between renderAt(t) and the screenshot (the article's version
 //     produced different PNGs on repeat runs when the page had a rAF loop)
-//   - the output folder is emptied first, so stale frames from a longer earlier render
-//     never end up in the MP4/GIF
+//   - old NNNN.png frames are removed first (only those files, never the folder's other contents),
+//     so stale frames from a longer earlier render never end up in the MP4/GIF
 //   - --frames renders only named stills (for the review loop), --scale renders at 2x
 //
 // usage:
@@ -21,7 +21,7 @@
 //   --out DIR              output folder (default out/frames)
 import { launchBrowser } from './tools.mjs';
 import { pathToFileURL } from 'node:url';
-import { mkdirSync, rmSync } from 'node:fs';
+import { clearFrames, prepareFramesDir } from './fsguard.mjs';
 import { resolve, join } from 'node:path';
 
 const pos = [], opt = {};
@@ -37,8 +37,9 @@ const SCALE = Number(opt.scale) || 1;
 const only = opt.frames ? opt.frames.split(',').map(Number) : null;
 if (!(FPS > 0) || !(N > 0)) { console.error('seconds and fps must be positive numbers'); process.exit(1); }
 
-if (!only) rmSync(OUT, { recursive: true, force: true });
-mkdirSync(OUT, { recursive: true });
+// only Transit's own frame files are removed (core/fsguard.mjs); unsafe folders are refused
+try { if (!only) clearFrames(OUT); prepareFramesDir(OUT); }
+catch (e) { console.error(`transit: ${e.message}`); process.exit(1); }
 
 const browser = await launchBrowser();
 const context = await browser.newContext({ viewport: { width: 1200, height: 675 }, deviceScaleFactor: SCALE });

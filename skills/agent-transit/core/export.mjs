@@ -1,5 +1,5 @@
 // scripts/export.mjs: turn out/frames/*.png into an MP4, a single-palette GIF, a contact sheet,
-// and a loop check. Works on macOS and Windows (just needs node + ffmpeg on PATH).
+// and a loop check. Works on macOS, Linux and Windows (needs only node + ffmpeg, see core/setup.mjs).
 //
 // usage: node core/export.mjs [all|mp4|gif|sheet|loop] [--fps 24] [--frames out/frames] [--out out]
 //
@@ -14,7 +14,7 @@
 import { execFileSync } from 'node:child_process';
 import { readdirSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { ffmpegBin, ffprobeBin } from './tools.mjs';
+import { ffmpegBin, countFrames } from './tools.mjs';
 
 const argv = process.argv.slice(2);
 const what = argv[0] && !argv[0].startsWith('--') ? argv[0] : 'all';
@@ -31,8 +31,7 @@ const N = files.length;
 if (!N) { console.error(`no frames in ${FR}`); process.exit(1); }
 const pattern = join(FR, '%04d.png');
 const ff = (args) => execFileSync(ffmpegBin(), ['-hide_banner', '-loglevel', 'error', '-y', ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
-const probeFrames = (f) => Number(execFileSync(ffprobeBin(), ['-v', 'error', '-count_frames', '-select_streams', 'v',
-  '-show_entries', 'stream=nb_read_frames', '-of', 'csv=p=0', f]).toString().trim());
+const probeFrames = countFrames;   // ffmpeg's own frame count; no ffprobe
 
 console.log(`${N} frames in ${FR} at ${FPS} fps = ${(N / FPS).toFixed(3)} s`);
 

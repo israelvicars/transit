@@ -20,16 +20,20 @@ for (let i = 0; i < argv.length; i++) {
 }
 const base = (process.env.TEMPO_URL || '').replace(/\/$/, '');
 if (!base) { console.error('set TEMPO_URL (e.g. http://localhost:3200); optional TEMPO_TOKEN or TEMPO_USER/TEMPO_PASSWORD, TEMPO_TENANT'); process.exit(1); }
+// what may appear in output files and messages: scheme + host + port only (no user:password@, path or query)
+const origin = (() => { try { const u = new URL(base); return `${u.protocol}//${u.host}`; } catch { console.error('TEMPO_URL is not a valid URL (expected e.g. http://localhost:3200)'); process.exit(1); } })();
 const headers = { Accept: 'application/json' };
 if (process.env.TEMPO_TOKEN) headers.Authorization = `Bearer ${process.env.TEMPO_TOKEN}`;
 else if (process.env.TEMPO_USER) headers.Authorization = 'Basic ' + Buffer.from(`${process.env.TEMPO_USER}:${process.env.TEMPO_PASSWORD || ''}`).toString('base64');
+// user:password@ in TEMPO_URL becomes Basic auth (fetch refuses URLs with credentials) and never reaches output
+const fetchBase = (() => { const u = new URL(base); if (u.username && !headers.Authorization) headers.Authorization = 'Basic ' + Buffer.from(`${decodeURIComponent(u.username)}:${decodeURIComponent(u.password)}`).toString('base64'); u.username = ''; u.password = ''; return u.href.replace(/\/$/, ''); })();
 if (process.env.TEMPO_TENANT) headers['X-Scope-OrgID'] = process.env.TEMPO_TENANT;
 const range = new URLSearchParams();
 if (opt.start) range.set('start', opt.start);
 if (opt.end) range.set('end', opt.end);
 const get = async (path) => {
-  try { return await fetch(base + path, { headers }); }
-  catch (e) { console.error(`cannot reach ${base}: ${e.cause?.code || e.message}`); process.exit(1); }
+  try { return await fetch(fetchBase + path, { headers }); }
+  catch (e) { console.error(`cannot reach ${origin}: ${e.cause?.code || 'network error'}`); process.exit(1); }
 };
 
 if ('find' in opt) {
@@ -54,6 +58,6 @@ if (!r.ok) { console.error(`Tempo ${r.status}: ${(await r.text()).slice(0, 400)}
 const body = await r.json();
 const out = opt.out || `traces/${id}.tempo.json`;
 mkdirSync(dirname(out), { recursive: true });
-writeFileSync(out, JSON.stringify({ _comment: `Tempo ${version} trace ${id} from ${base}`, ...body }, null, 1) + '\n');
+writeFileSync(out, JSON.stringify({ _comment: `Tempo ${version} trace ${id} from ${origin}`, ...body }, null, 1) + '\n');
 const n = JSON.stringify(body).match(/"spanId"/g)?.length || 0;
 console.log(`wrote ${out} (${n} spans, Tempo ${version} API)${/partial/i.test(String(body.status || '')) ? ' - PARTIAL trace' : ''}`);

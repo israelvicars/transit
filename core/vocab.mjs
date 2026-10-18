@@ -14,6 +14,8 @@ export const vocab = {
     legendInfra: 'dotted: infrastructure (no spans of its own)',
     synthetic: 'SYNTHETIC sample data', renderedLocally: 'rendered locally by Transit',
     unmatched: 'unmatched', matched: 'matched', contracts: 'contracts', noContractIndex: 'no contract index',
+    contractFooter: true,   // footer counts hops without a contract; only request traces have contracts
+    scrubbedValues: 'value(s) scrubbed from names, messages and URLs', scrubOff: 'Value scrubbing was OFF for this page: do not share it.',
     error: 'error', slow: 'slow', ok: 'ok',
     tableTitle: 'Hops', tableStart: 'start', tableFrom: 'from', tableTo: 'to', tableSpan: 'span',
     tableStatus: 'status', tableContract: 'contract', infrastructureHop: 'infrastructure hop', infrastructureHopTitle: 'Infrastructure hop',
@@ -47,14 +49,14 @@ export const vocab = {
     request: 'workflow run', response: 'completion', delay: 'DELAY', serviceAlert: 'SERVICE ALERT',
     legendDelay: 'delay: self time ≥', legendAlert: 'service alert: error starts here',
     tableTitle: 'Steps', tableSpan: 'step', infrastructure: 'workflow infrastructure',
-    hop: 'STEP', span: 'JOB', trace: 'run', error: 'failed', slow: 'slow step', skipped: 'skipped',
+    hop: 'STEP', span: 'JOB', trace: 'run', error: 'failed', slow: 'slow step', skipped: 'skipped', contractFooter: false,
   },
   agent: {
     lineNoun: 'tool family', stationNoun: 'call', hopNoun: 'call', hopNounPlural: 'calls',
     trace: 'session', request: 'session', response: 'completion', tableTitle: 'Tool calls', tableSpan: 'call',
     delay: 'DELAY', serviceAlert: 'SERVICE ALERT', legendDelay: 'delay: self time ≥',
     legendAlert: 'service alert: error starts here', infrastructure: 'agent infrastructure',
-    hop: 'CALL', span: 'TOOL', error: 'error', slow: 'slow call',
+    hop: 'CALL', span: 'TOOL', error: 'error', slow: 'slow call', contractFooter: false,
   },
 };
 

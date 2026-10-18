@@ -11,14 +11,18 @@
 //                              JSON it returns to a file, then runs the `file` backend. See references/adapters.md.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { normalize } from '../adapters/normalize.mjs';
+import { readInput } from '../../../core/build.mjs';
 import { ensureSetup } from '../../../core/setup.mjs';
 await ensureSetup({ need: [] });
-const runChild = (file, args) => { try { execFileSync('node', [new URL(file, import.meta.url).pathname, ...args], { stdio: 'inherit' }); } catch (e) { process.exit(e.status || 1); } };
+const runChild = (file, args) => { try { execFileSync(process.execPath, [fileURLToPath(new URL(file, import.meta.url)), ...args], { stdio: 'inherit' }); } catch (e) { process.exit(e.status || 1); } };
 const [backend, arg, ...rest] = process.argv.slice(2); const opt = {};
 for (let i = 0; i < rest.length; i++) if (rest[i].startsWith('--')) opt[rest[i].slice(2)] = rest[++i];
 if (backend === 'file' && arg) {
-  const t = normalize(readFileSync(arg, 'utf8'), { traceId: opt['trace-id'], format: opt.format });
+  let t;
+  try { t = normalize(readInput(arg), { traceId: opt['trace-id'], format: opt.format }); }
+  catch (e) { console.error(`transit: ${e.message.replace(/\s+/g, ' ')}`); process.exit(1); }
   const out = opt.out || arg.replace(/\.json$/, '') + '.transit.json';
   writeFileSync(out, JSON.stringify(t, null, 1) + '\n');
   console.log(`wrote ${out} (${t.spans.length} spans, from ${t.meta.format})`);

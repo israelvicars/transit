@@ -28,3 +28,9 @@ A public transit map for a GitHub Actions run.
 - Never upload a run or render anywhere unless the user asks.
 - GitHub Actions logs and metadata can contain private repository information. Keep the input and output local; use synthetic data for examples and tests.
 - `gh` is optional. A saved JSON file can always be passed directly to the core build/render scripts.
+
+## Sharing
+
+By default the run title (it is the PR or commit title) and the branch name are left out of the page, and values in
+job and step names and messages are scrubbed (emails, tokens, URL query strings...). Pass `--keep-ci-titles` to keep
+the title and branch, `--strict` for the stricter level. See request-transit's SKILL.md for the full list.

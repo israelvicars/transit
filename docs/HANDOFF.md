@@ -2,7 +2,7 @@
 
 Branch `suite` (local only, never pushed). Plan: docs/SUITE_PLAN.md. Baseline: docs/suite-baseline.md.
 Pattern: Codex writes code with `codex exec --full-auto "<prompt>" </dev/null` (no git, `npm test` only; its sandbox blocks Chromium). The reviewer then runs `npm test`, `npm run verify`, `npm run test:ui` and the MP4 sha256 check outside Codex, and commits.
-Gates: the OTel MP4 sha256 must stay `223590ce6b1a30497d4ae0f3dae860fbaca1c45cd291f450a8fa091c4c2f45ff`. The out/ui/*.png screenshots must match the pre-change commit (compare with git stash).
+Gates: the request film hash (verify's `film hash`) must stay `86d08fd5fe208fb0`, and the OTel MP4 sha256 must stay `f4417aac2297a70b4e025d3440d68904f0dcf1c92ce88ff9685fb6acb6ca89f9` with the pinned ffmpeg-static 5.3.0 (it was `223590ce…` with Homebrew ffmpeg 9.0.2, which still reproduces it via TRANSIT_FFMPEG; see docs/suite-baseline.md). The out/ui/*.png screenshots must match the pre-change commit (compare with git stash).
 Laptop: PATH=/opt/homebrew/bin:$PATH, no rg.
 
 ## M0 baseline: done (3cae93f)
@@ -183,3 +183,21 @@ Applied the box patch as aba3cc0. `npm run check` passes on the laptop; MP4 iden
   - An innermost error span with weak text borrows the message from its same-service server span, so the alert reads "Payment request failed. Invalid token…" instead of "Error".
   - `fetch-posthog-api.mjs` also reads `POSTHOG_PERSONAL_API_KEY`, looks up the project via `@current` when `POSTHOG_PROJECT_ID` is unset (needs `project:read`), and hints at the cause on 401/403.
 - Desktop: `~/Desktop/transit-examples/posthog-payment-failure.gif`.
+
+## 2026-10-18 security and portability fixes (bake-off findings): done
+- Setup never installs system packages: the brew path is gone. ffmpeg resolves from `TRANSIT_FFMPEG`, then the pinned `ffmpeg-static` 5.3.0 (package.json + lockfile, install script approved in `allowScripts`), then PATH. Otherwise setup prints the command and stops. ffprobe isn't used at all: frame counts come from ffmpeg itself (`tools.countFrames`).
+- Value scrubbing (`core/scrub.mjs`), default on and safe to share. It covers names, peers, operations, status messages, attribute values, the source note and warnings:
+  - emails, bearer/JWT/known-prefix tokens, `password=`/`api_key=`-style secrets
+  - URL credentials and query strings, long hex, high-entropy base64, UUIDs
+  - home-directory names, ARN account ids
+  - the CI run title and branch (`--keep-ci-titles` to keep them)
+  - `--strict`/`--share` adds IPs, internal hosts, long numeric ids and an attribute allowlist; `--no-scrub` turns it off and warns. Key redaction is broader (api-key, credential, jwt, set-cookie...).
+  - Seeded-canary tests are in `core/test-scrub.mjs`.
+- Bad input (missing, empty, non-JSON, JSON scalar, unrecognized) gives a one-line `transit: …` error; `TRANSIT_DEBUG=1` shows the stack. Shared parsing and errors live in `core/cli.mjs`.
+- No shell strings anywhere: verify's ffmpeg gates use arg arrays and the recorded ffmpeg; child scripts run via `process.execPath`; Windows npm runs through npm-cli.js.
+- No recursive deletes: `core/fsguard.mjs` removes only `NNNN.png` and the `.transit-frames` marker, then the folder if empty. It refuses the filesystem root, home, the repo root, the cwd and their ancestors, and `--name` must be a single path segment.
+- Node >= 20 (`engines`, setup floor); the lockfile root name is now `transit`.
+- The footer's "unmatched: no contract index" is gated by vocab (`contractFooter`), so it only appears on request pages. CI/agent headers say "idle gaps shortened, not wall-clock", and large CI runs add "failed steps only".
+- The Tempo fetcher writes and prints only scheme://host:port. `user:pass@` in TEMPO_URL becomes Basic auth.
+- `.github/workflows/test.yml` (written, **not pushed**: the laptop's GitHub OAuth token lacks the `workflow` scope, so the push was refused): `npm test` on Node 20 and 22, plus `npm run check` with Playwright's pinned headless shell and ffmpeg-static on ubuntu. No secrets; read-only token. It's left untracked in the laptop checkout. To push it: `gh auth refresh -s workflow`, then commit and push.
+- Films: the request frames are unchanged; the MP4/GIF bytes changed only because of the pinned encoder. The CI and agent films changed (footer, header note, CI title).
