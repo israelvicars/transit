@@ -6,10 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { validate, parseJsonSafe } from '../../request-transit/adapters/normalize.mjs';
 
 const FAMILIES = new Map([
-  ['read', 'read'], ['readfile', 'read'], ['glob', 'read'], ['grep', 'read'], ['ls', 'read'], ['view', 'read'],
+  ['read', 'read'], ['readfile', 'read'], ['glob', 'read'], ['grep', 'read'], ['ls', 'read'], ['view', 'read'], ['view_image', 'read'],
   ['edit', 'edit'], ['write', 'edit'], ['multiedit', 'edit'], ['apply_patch', 'edit'],
-  ['bash', 'shell'], ['shell', 'shell'], ['exec_command', 'shell'], ['local_shell', 'shell'],
-  ['webfetch', 'web'], ['websearch', 'web'], ['web_fetch', 'web'], ['web_search', 'web'],
+  ['bash', 'shell'], ['shell', 'shell'], ['exec_command', 'shell'], ['local_shell', 'shell'], ['write_stdin', 'shell'], ['wait', 'shell'],
+  ['webfetch', 'web'], ['websearch', 'web'], ['web_fetch', 'web'], ['web_search', 'web'], ['web__run', 'web'], ['web.run', 'web'],
   ['task', 'subagent'], ['agent', 'subagent'],
   ['skill', 'skill'], ['todowrite', 'plan'], ['update_plan', 'plan'], ['notebookedit', 'edit'],
   ['strreplace', 'edit'], ['delete', 'edit'], ['editnotebook', 'edit'],
@@ -24,8 +24,8 @@ const isoMs = (x) => {
 const key = (name) => String(name || '').toLowerCase();
 const family = (name) => {
   const n = key(name);
-  if (n.startsWith('mcp__') || n.includes('.')) return 'mcp';
-  return FAMILIES.get(n) || 'other';
+  if (FAMILIES.has(n)) return FAMILIES.get(n);
+  return n.startsWith('mcp__') || n.includes('.') ? 'mcp' : 'other';
 };
 const contentText = (x) => Array.isArray(x) ? x.map((b) => typeof b === 'string' ? b : b && (b.text || b.content || '')).join(' ') : String(x ?? '');
 const denied = (x) => /\b(denied|permission denied|not allowed|rejected|approval required)\b/i.test(contentText(x));
@@ -99,7 +99,7 @@ function codexEvents(lines, warnings) {
       let name = p.namespace && p.name ? `${p.namespace}.${p.name}` : p.name || (kind === 'local_shell_call' ? 'local_shell' : kind);
       let wrapper;
       if (kind === 'custom_tool_call' && name === 'exec') {
-        const match = typeof p.input === 'string' && p.input.match(/\btools\.(\w+)\s*\(/);
+        const match = typeof p.input === 'string' && [...p.input.matchAll(/\btools\.(\w+)\s*\(/g)].find((m) => !/^(forEach|map|filter|find|some|every|reduce|includes|keys|values|entries)$/.test(m[1]));
         name = match ? match[1] : 'exec';
         args = {};
         wrapper = 'exec';

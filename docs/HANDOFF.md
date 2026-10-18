@@ -133,3 +133,11 @@ Public or self-generated data only. No employer data or accounts were used.
 
 ## Pre-launch fixes landed on macOS (2026-10-18)
 Applied the box patch as aba3cc0. `npm run check` passes on the laptop; MP4 identical to baseline. Real `gh` test: `fetch.mjs --last-failed` on python/cpython (39132655685, 2 jobs) and microsoft/vscode (39124548569, 38 jobs, collapsed to failed steps); both rendered. Cosmetic follow-up: label crowding on wide matrix runs.
+
+## Exercise round 2 (2026-10-18)
+- Agent readers swept across every local session, counting only (12 Claude Code, 24 Codex): all parsed, no failures. Fixed Codex family mapping: write_stdin/wait -> shell, view_image -> read, web__run -> web (known names now win over the "contains '.' = mcp" rule), and the exec-snippet inner-tool lookup skips array methods like `tools.forEach(`. 'other' dropped from 118 to 11 (request_permissions, bare exec). Test added.
+- CI via real gh --last-failed: pytorch/pytorch (3 jobs), rust-lang/rust (13 jobs), python/cpython, microsoft/vscode (38 jobs, collapsed). All built.
+- OTLP: the official opentelemetry-proto examples/trace.json builds (1 span; missing parent warned).
+- Docker Desktop is installed, but the daemon isn't responding (`docker info` hangs), so OTel Demo/HotROD/Tempo compose were not run.
+- Follow-ups: idle-gap compression for long agent sessions (609 calls over 13 h means mostly empty animation); label crowding on wide CI matrices.
+- `npm run check` passes; MP4 identical.

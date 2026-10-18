@@ -42,4 +42,18 @@ for (const format of ['claude-code', 'codex', 'cursor']) {
   assert.match(shownHtml, /SECRET_CANARY_COMMAND_7731/);
   assert.doesNotMatch(shownHtml, /SECRET_CANARY_PROMPT_7731|SECRET_CANARY_OUTPUT_7731|SECRET_CANARY_FILE_CONTENT_7731/);
 }
+
+// Codex tool names seen on real sessions (names only): write_stdin/wait -> shell, view_image -> read, web__run -> web;
+// an exec snippet that iterates `tools.forEach(` must still resolve to the real inner tool.
+{
+  const ts = (i) => `2026-10-16T12:00:${String(i).padStart(2, '0')}.000Z`;
+  const lines = [{ timestamp: ts(0), type: 'session_meta', payload: { id: 's' } }];
+  const calls = [['function_call', 'write_stdin'], ['function_call', 'wait'], ['function_call', 'view_image'], ['function_call', 'web__run'], ['custom_tool_call', 'exec', 'x.forEach(); tools.forEach(t => t); await tools.apply_patch("*** Begin Patch")']];
+  calls.forEach(([type, name, input], i) => {
+    lines.push({ timestamp: ts(2 * i + 1), type: 'response_item', payload: type === 'custom_tool_call' ? { type, name, input, call_id: `c${i}` } : { type, name, arguments: '{}', call_id: `c${i}` } });
+    lines.push({ timestamp: ts(2 * i + 2), type: 'response_item', payload: { type: type + '_output', call_id: `c${i}`, output: 'ok' } });
+  });
+  const t = normalizeAgent(lines.map((l) => JSON.stringify(l)).join('\n'), { format: 'codex' });
+  assert.deepEqual(t.spans.slice(1).map((s) => s.service), ['shell', 'shell', 'read', 'web', 'edit']);
+}
 console.log('agent: synthetic Claude Code, Codex, and Cursor normalization plus privacy pass');
