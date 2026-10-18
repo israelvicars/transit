@@ -18,6 +18,7 @@
   #hops { width: 1200px; box-sizing: border-box; padding: 4px 24px 24px; font-size: 13px; }
   #hops table { border-collapse: collapse; width: 100%; }
   #hops td, #hops th { text-align: left; padding: 3px 8px; border-bottom: 1px solid #eee; }
+  #hops td:first-child { white-space: nowrap; }   /* start times like "1.5 ms" never wrap (narrow windows, long service names) */
   #wrap { display: flex; align-items: flex-start; }
   #main { width: 1200px; flex: none; }
   #panel { width: 400px; flex: none; box-sizing: border-box; border-left: 2px solid #111; font-size: 13px; }
