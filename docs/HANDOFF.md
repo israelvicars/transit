@@ -130,3 +130,6 @@ Public or self-generated data only. No employer data or accounts were used.
   - X-Ray: verbatim examples from the AWS segment-document docs (embedded subsegment; plus SQL and DynamoDB fault subsegments).
 - README links and images all resolve on GitHub (hero/ci/agent GIFs, skill READMEs).
 - Still untested: live API fetches (Datadog/PostHog/X-Ray/Tempo) and `gh` itself (the shim emulated it); Jaeger JSON (no adapter); the macOS MP4 hash gate for these fixes, since `npm run check` must be run on the laptop.
+
+## Pre-launch fixes landed on macOS (2026-10-18)
+Applied the box patch as aba3cc0. `npm run check` passes on the laptop; MP4 identical to baseline. Real `gh` test: `fetch.mjs --last-failed` on python/cpython (39132655685, 2 jobs) and microsoft/vscode (39124548569, 38 jobs, collapsed to failed steps); both rendered. Cosmetic follow-up: label crowding on wide matrix runs.
