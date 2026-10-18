@@ -1,0 +1,44 @@
+# Unit tests on every push and PR, plus the full render/verify gate (Chromium + the pinned ffmpeg-static).
+# No secrets: everything runs on bundled samples. Read-only token.
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+  check:
+    runs-on: ubuntu-latest
+    env:
+      TRANSIT_NO_SYSTEM_BROWSER: '1'   # render with Playwright's pinned headless shell, not the runner's Chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Chromium headless shell (pinned to playwright-core) and its system libraries
+        run: npx playwright-core install --with-deps --only-shell chromium
+      - run: npm run check
+      - name: Film hashes (informational; differ by browser build, so not a gate here)
+        if: always()
+        run: sha256sum out/*/anim.mp4 out/*/anim.gif || true
