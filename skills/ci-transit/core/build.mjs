@@ -36,6 +36,8 @@ export function redact(trace, keys = [], useDefault = true) {
 export function splitSingleService(trace) {
   const services = new Set(trace.spans.map((s) => s.service));
   if (services.size !== 1 || trace.spans.length < 2) return false;
+  // calls to an uninstrumented peer (DB, AWS service, broker) already give the map a second station
+  if (trace.spans.some((s) => s.peer && s.peer !== s.service)) return false;
   const svc = [...services][0];
   const op = (name) => String(name || 'span').replace(/[\s._:#/-]*(\d+|[0-9a-f]{8,})$/i, '').slice(0, 40) || String(name);
   const ops = new Set();

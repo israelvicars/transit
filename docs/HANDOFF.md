@@ -162,3 +162,15 @@ Applied the box patch as aba3cc0. `npm run check` passes on the laptop; MP4 iden
 - OTel Demo (main 85c2cb2, compose.yaml + compose.observability.yaml, 25 containers) ran fine in 8 GB with Lightdash stopped. Jaeger API via http://localhost:8080/jaeger/ui/api/v3. paymentFailure flag set to 50% in the local clone's flagd file to get errors (reverted after).
 - Rendered real traces: user_checkout_multi (194 spans, 12 services, valkey-cart inferred), user_checkout_single with payment SERVICE ALERT (66 spans), frontend GET (33 spans). No adapter or layout bugs. One cosmetic fix: hop table start column no-wrap ("12 ms" wrapped at 1280 px). Canvas untouched: MP4 223590ce… / GIF bed864e9… unchanged; only the hop-list UI screenshots changed (start column).
 - GIFs: ~/Desktop/transit-examples/otel-demo-checkout.gif, otel-demo-payment-failure.gif. Demo stopped with compose down; images kept (58 GiB free).
+
+## 2026-10-18 PostHog live, X-Ray from real data: done (PostHog readback blocked on key scope)
+- PostHog (personal US Cloud project; region found by testing, US answers and EU rejects the project token). The OTel Demo collector got an extra `otlp_http` exporter to `https://us.i.posthog.com/i/v1/traces` through a local extras file outside the repo, with the token passed from the shell. About 54k spans were sent with 0 failures, including paymentFailure traces (flag at 50%, reverted).
+- Readback could not run: `fetch-posthog-api.mjs` needs a **personal API key (phx_) with `tracing:read`** (plus `project:read` for `@current`, or set a numeric `POSTHOG_PROJECT_ID`). Project secret keys (phs_) can't hold that scope and get a 401. The script now rejects phs_ with that explanation. The tracing route is confirmed live; a successful read is still untested.
+- X-Ray, no AWS account. These are the only public segment fixtures found: opentelemetry-collector-contrib `internal/aws/xray/testdata` (16 docs; all build; `segmentValidationFailed.txt` is invalid on purpose and is rejected). The LocalStack X-Ray snapshot has no segment bodies. The aws-xray-sdk-python/go/node repos and grafana/x-ray-datasource have no segment fixtures.
+- Real X-Ray data: the demo collector's `awsxray` exporter (local_mode, dummy credentials) pointed at a local capture server. About 4.1k traces / 19k segment docs were captured and all normalize. Fixes:
+  - Standalone `type:"subsegment"` documents (how the exporter sends every non-server span) now inherit the enclosing segment's service instead of becoming fake services.
+  - Remote peers: a bare HTTP-method name uses the URL host, and gRPC `pkg.Service/Method` uses the service.
+  - SDK plumbing errors (attempt/wait) fold into their aws call.
+  - splitSingleService skips traces that already have a distinct peer.
+- About 50 of the 19k spans are `unknown_service`: their parent segment was lost to capture timeouts.
+- Desktop: `~/Desktop/transit-examples/xray-otel-demo-shipping-error.gif`.

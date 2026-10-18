@@ -38,7 +38,7 @@ Every script checks its own prerequisites the first time (`<skill>/../../core/se
    JSON to a file; headless, use `node <skill>/scripts/fetch.mjs datadog-api <trace_id>`.
    For PostHog Distributed Tracing, call the PostHog MCP tool `apm-trace-get` (find ids with
    `query-apm-spans`), follow pages until `hasMore` is false, and save the JSON; headless,
-   `node <skill>/scripts/fetch.mjs posthog-api <trace_id>` (untested live). See `<skill>/references/adapters.md`.
+   `node <skill>/scripts/fetch.mjs posthog-api <trace_id>` (needs `POSTHOG_API_KEY` = a personal API key `phx_` with `tracing:read`; project tokens `phc_` and project secret keys `phs_` are rejected). See `<skill>/references/adapters.md`.
 2. **Build the interactive page:** `node <skill>/../../core/build.mjs <trace.json> --out ./transit-out/<name>/transit.html --title "..."`.
    Open it in a browser. `?t=4.5` freezes one frame.
 3. **Share it (MP4 + GIF):** `node <skill>/../../core/render.mjs <trace.json> --name <name> --out-dir ./transit-out/<name> --title "..."` writes

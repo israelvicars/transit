@@ -179,4 +179,32 @@ t('Jaeger v2 /api/v3 response: {result:{resourceSpans}} unwraps to the OTLP trip
   assert.deepEqual(jg.spans.map((s) => [s.spanId, s.parentId, s.service, s.start, s.duration]), ot.spans.map((s) => [s.spanId, s.parentId, s.service, s.start, s.duration]));
 });
 
+t('X-Ray: error flags on SDK plumbing inside an aws call are folded into the call (aws-xray-sdk-go shape)', () => {
+  const err = { error: true, cause: { exceptions: [{ type: 'ResourceNotFoundException', message: 'Requested resource not found' }] } };
+  const seg = { trace_id: '1-5f29ab21-d4ebf299219a65bd5c31d6da', id: 'aaaaaaaaaaaaaaa1', name: 'app', start_time: 1, end_time: 1.06, ...err, subsegments: [
+    { id: 'aaaaaaaaaaaaaaa2', name: 'dynamodb', namespace: 'aws', aws: { operation: 'PutItem' }, start_time: 1.01, end_time: 1.05, ...err, subsegments: [
+      { id: 'aaaaaaaaaaaaaaa3', name: 'attempt', start_time: 1.01, end_time: 1.04, ...err, subsegments: [{ id: 'aaaaaaaaaaaaaaa5', name: 'response', start_time: 1.03, end_time: 1.04 }] },
+      { id: 'aaaaaaaaaaaaaaa4', name: 'wait', start_time: 1.04, end_time: 1.05, ...err }] }] };
+  const tr = normalize(seg), by = Object.fromEntries(tr.spans.map((s) => [s.name, s]));
+  assert.equal(by['dynamodb PutItem'].status, 'error'); assert.equal(by['dynamodb PutItem'].peer, 'dynamodb');
+  assert.equal(by.attempt.status, 'ok'); assert.equal(by.wait.status, 'ok');
+  assert.equal(by.app.status, 'error');
+});
+
+t('X-Ray: standalone subsegment documents (awsxray exporter shape) inherit the segment service; remote peers are named sensibly', () => {
+  const T = '1-6710a2b0-0123456789abcdef01234567', doc = (d) => ({ Id: d.id, Document: JSON.stringify({ trace_id: T, ...d }) });
+  const tr = normalize({ Traces: [{ Id: T, Segments: [
+    doc({ id: 'b000000000000001', name: 'checkout', start_time: 10, end_time: 10.2 }),
+    doc({ id: 'b000000000000002', type: 'subsegment', parent_id: 'b000000000000001', name: 'prepareOrderItems', start_time: 10.01, end_time: 10.15 }),
+    doc({ id: 'b000000000000003', type: 'subsegment', parent_id: 'b000000000000002', name: 'oteldemo.CartService/GetCart', namespace: 'remote', start_time: 10.02, end_time: 10.05 }),
+    doc({ id: 'b000000000000004', type: 'subsegment', parent_id: 'b000000000000002', name: 'POST', namespace: 'remote', http: { request: { method: 'POST', url: 'http://shipping:8080/get-quote' } }, start_time: 10.06, end_time: 10.1, fault: true }),
+    doc({ id: 'b000000000000005', name: 'shipping', parent_id: 'b000000000000004', start_time: 10.065, end_time: 10.095, fault: true }),
+  ] }] });
+  const by = Object.fromEntries(tr.spans.map((s) => [s.spanId, s]));
+  assert.equal(by.b000000000000002.service, 'checkout'); assert.equal(by.b000000000000002.kind, 'internal');
+  assert.equal(by.b000000000000003.service, 'checkout'); assert.equal(by.b000000000000003.peer, 'oteldemo.CartService');
+  assert.equal(by.b000000000000004.peer, 'shipping'); assert.equal(by.b000000000000004.kind, 'client');
+  assert.equal(by.b000000000000005.service, 'shipping'); assert.equal(by.b000000000000005.kind, 'server');
+});
+
 console.log(`${n} tests passed`);

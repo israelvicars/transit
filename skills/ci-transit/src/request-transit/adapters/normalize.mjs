@@ -244,6 +244,7 @@ function fromPosthog(doc) {
 //                               peer = name; becomes a line to the callee's segment if one has it as parent_id,
 //                               else an infrastructure node
 //   fault (5xx) / error (4xx) / throttle (429) -> status error; message from cause.exceptions[0] or the flag + HTTP status
+//     (errors on internal subsegments inside an aws/remote call are folded into that call)
 //   inferred segments (inferred: true, made by X-Ray for AWS services) are dropped: the aws subsegment already draws them
 //   http.request.method/url, http.response.status, aws.operation/table_name/queue_url, sql.database_type -> attrs
 const XRAY_PRODUCE = /^(SendMessage|SendMessageBatch|Publish|PublishBatch|PutRecord|PutRecords|PutEvents)$/;
@@ -265,6 +266,13 @@ const isXray = (doc) => {
   if (first.trace_id && first.start_time != null && first.id) return 'xray';
   return null;
 };
+// the awsxray exporter names remote subsegments by span name: a bare HTTP method is replaced by the URL host,
+// a gRPC "pkg.Service/Method" by its service, so one remote service is one station
+const xrayPeer = (name, url) => {
+  const grpc = /^([\w.]+\.\w+)\/\w+$/.exec(name || ''); if (grpc) return grpc[1];
+  if (!/^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$/i.test(name || '') || !url) return name;
+  try { return new URL(url).hostname || name; } catch { return name; }
+};
 const xrayTraceId = (id) => { const m = /^1-([0-9a-f]{8})-([0-9a-f]{24})$/i.exec(id || ''); return m ? (m[1] + m[2]).toLowerCase() : id; };
 const secNs = (x) => BigInt(Math.round(Number(x) * 1e6)) * 1000n;   // X-Ray times carry microseconds
 function fromXray(doc) {
@@ -272,6 +280,10 @@ function fromXray(doc) {
   let dropped = 0, open = 0;
   const all = xraySegments(doc);
   function walk(s, ctx) {
+    // PutTraceSegments also takes standalone subsegment documents (type "subsegment", with trace_id and
+    // parent_id); the collector's awsxray exporter sends every non-server span that way. Their service is
+    // the enclosing segment's, resolved below once every document is in.
+    if (!ctx && s.type === 'subsegment') ctx = { service: null, parent: s.parent_id, traceId: s.trace_id };
     const isSeg = !ctx;
     const svc = isSeg ? s.name : ctx.service;
     const ns = s.namespace;
@@ -301,15 +313,31 @@ function fromXray(doc) {
         : aws.operation ? `${s.name} ${aws.operation}` : (s.sql && s.sql.sanitized_query) || (req.method && req.url ? `${req.method} ${new URL(req.url, 'http://x').pathname}` : s.name),
       kind, startNs, endNs, status: failed ? 'error' : 'ok',
       statusMessage: failed ? (ex && (ex.message || ex.type) ? `${ex.type ? ex.type + ': ' : ''}${ex.message || ''}`.replace(/: $/, '') : `${flag}${res.status ? ' (HTTP ' + res.status + ')' : ''}`) : undefined,
-      peer: kind === 'client' || kind === 'producer' ? s.name : undefined,
+      peer: kind === 'client' || kind === 'producer' ? xrayPeer(s.name, req.url) : undefined,
       operation: aws.operation, attrs,
     };
+    if (!svc) span.inheritService = true;
     raw.push(span);
     return span;
   }
   for (const s of all) { if (s.inferred) { dropped++; continue; } walk(s, null); }
   // a segment whose parent is a producer subsegment was delivered through a queue
   const byId = new Map(raw.map((s) => [s.spanId, s]));
+  for (const s of raw) {
+    if (!s.inheritService) continue;
+    let p = byId.get(s.parentId); while (p && p.inheritService) p = byId.get(p.parentId);
+    s.service = (p && p.service) || 'unknown_service';
+  }
+  for (const s of raw) delete s.inheritService;
+  // SDK plumbing inside an aws/remote call (attempt, wait, response... in aws-xray-sdk-go) repeats the call's
+  // error flag. The call is the error origin, so the alert lands on the AWS service's station, not the caller's.
+  const callOf = (s) => { for (let p = byId.get(s.parentId); p; p = byId.get(p.parentId)) { if (p.kind === 'client' || p.kind === 'producer') return p; if (p.kind !== 'internal') return null; } return null; };
+  for (const s of raw) {
+    if (s.kind !== 'internal' || s.status !== 'error') continue;
+    const call = callOf(s); if (!call) continue;
+    if (call.status !== 'error') { call.status = 'error'; call.statusMessage = s.statusMessage; }
+    s.status = 'ok'; delete s.statusMessage;
+  }
   for (const s of raw) { const p = s.parentId && byId.get(s.parentId); if (s.kind === 'server' && p && p.kind === 'producer') s.kind = 'consumer'; }
   if (dropped) warnings.push(`dropped ${dropped} inferred segment(s) (AWS services X-Ray drew from client subsegments)`);
   if (open) warnings.push(`${open} segment(s) still in progress; end set to their last child`);

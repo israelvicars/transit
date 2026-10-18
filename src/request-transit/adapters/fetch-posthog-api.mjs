@@ -1,10 +1,11 @@
 // adapters/fetch-posthog-api.mjs: pull every span of one trace from PostHog Distributed Tracing and
 // save it as a file normalize.mjs auto-detects (format "posthog").
-// UNTESTED against a live PostHog project. Endpoint and fields from posthog.com/docs/api/tracing-2;
-// the pagination body ({offset}) is a best guess from the documented hasMore/nextOffset response.
+// Endpoint and fields from posthog.com/docs/api/tracing-2 (scope tracing:read). Route confirmed live on US Cloud
+// (2026-10-18: answers 401 for a non-personal key); a successful read is still untested. The pagination body
+// ({offset}) follows the documented hasMore/nextOffset response.
 //
 // Env only (never commit keys):
-//   POSTHOG_API_KEY     personal API key (phx_...), needs read access to tracing. NOT the phc_ project token.
+//   POSTHOG_API_KEY     personal API key (phx_...) with the tracing:read scope. NOT the phc_ project token, NOT a phs_ project secret key.
 //   POSTHOG_HOST        https://us.posthog.com (default) or https://eu.posthog.com or your self-hosted URL
 //   POSTHOG_PROJECT_ID  numeric project id
 // usage: node adapters/fetch-posthog-api.mjs <trace_id_hex> [--out traces/<id>.posthog.json]
@@ -18,6 +19,7 @@ const { POSTHOG_API_KEY: key, POSTHOG_PROJECT_ID: project } = process.env;
 const host = (process.env.POSTHOG_HOST || 'https://us.posthog.com').replace(/\/$/, '');
 if (!traceId || !/^[0-9a-f]{32}$/i.test(traceId)) { console.error('usage: node adapters/fetch-posthog-api.mjs <32-hex trace id> [--out file]'); process.exit(1); }
 if (!key || !project) { console.error('set POSTHOG_API_KEY (personal key, phx_...) and POSTHOG_PROJECT_ID; POSTHOG_HOST defaults to https://us.posthog.com'); process.exit(1); }
+if (key.startsWith('phs_')) { console.error('POSTHOG_API_KEY is a project secret key (phs_); those only take feature_flag/endpoint/support_ticket scopes and PostHog rejects them on the tracing API (401). Create a personal API key (phx_) with the tracing:read scope.'); process.exit(1); }
 if (key.startsWith('phc_')) { console.error('POSTHOG_API_KEY looks like a project token (phc_); the query API needs a personal API key (phx_)'); process.exit(1); }
 
 const url = `${host}/api/projects/${encodeURIComponent(project)}/tracing/spans/trace/${traceId.toLowerCase()}/`;

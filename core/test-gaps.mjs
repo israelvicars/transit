@@ -34,5 +34,7 @@ t('single-service request trace: stations become operations, numbered children s
   assert.equal(tr.spans[1].attrs['service.name'], 'mono');
   const multi = { meta: { warnings: [] }, spans: [{ spanId: 'r', parentId: null, service: 'a' }, { spanId: 'x', parentId: 'r', service: 'b' }] };
   assert.equal(splitSingleService(multi), false);
+  const peer = { meta: { warnings: [] }, spans: [{ spanId: 'r', parentId: null, service: 'DDB' }, { spanId: 'd', parentId: 'r', service: 'DDB', kind: 'client', peer: 'dynamodb', name: 'DescribeTable' }] };
+  assert.equal(splitSingleService(peer), false);   // X-Ray ddbSample: the DynamoDB peer is the second station
 });
 console.log(`${n} gap/build tests passed`);
