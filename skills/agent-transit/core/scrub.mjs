@@ -24,6 +24,15 @@ function looksSecret(m) {
   const run = m.split(/[-_/+.=]/).reduce((a, b) => (b.length > a.length ? b : a), '');
   return run.length >= 24 && /[a-z]/.test(run) && /[A-Z]/.test(run) && /\d/.test(run) && entropy(run) >= 4;
 }
+// key=value always counts; with a colon ("session: tool calls" is prose) only a strong secret key or a value that looks
+// like a secret (has a digit or symbol, or is a long unbroken run) is redacted
+const STRONG = /^(password|passwd|pwd|secret|client[_-]?secret|api[_-]?key|apikey|x-api-key|access[_-]?key|private[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|authorization|credentials?)$/i;
+function kvReplace(m, k, sep, v) {
+  if (/^\[[a-z-]+\]$/.test(v) || /^(bearer|basic|token)$/i.test(v)) return m;
+  const bare = v.replace(/^["']|["']$/g, '');
+  if (sep.includes(':') && !STRONG.test(k) && !/[\d!@#$%^&*+/=_~-]/.test(bare) && bare.length < 16) return m;
+  return `${k}${sep}[redacted]`;
+}
 const RULES = [
   // URL userinfo first, then query strings, so the URL rules see whole URLs
   ['userinfo', /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+(?::[^\s/@]*)?@/gi, '$1[credentials]@'],
@@ -31,7 +40,7 @@ const RULES = [
   ['jwt', /\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g, '[jwt]'],
   ['bearer', /\b(bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [token]'],
   ['token', /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9_-]{20,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{30,}|ph[cxs]_[A-Za-z0-9]{20,}|(?:AKIA|ASIA)[A-Z0-9]{16}|AIza[A-Za-z0-9_-]{30,})\b/g, '[token]'],
-  ['kv', new RegExp(`\\b(${KEYS})(\\s*[=:]\\s*)("[^"]*"|'[^']*'|[^\\s&,;)"'\\]}]+)`, 'gi'), (m, k, sep, v) => (/^\[[a-z-]+\]$/.test(v) || /^(bearer|basic|token)$/i.test(v) ? m : `${k}${sep}[redacted]`)],
+  ['kv', new RegExp(`\\b(${KEYS})(\\s*[=:]\\s*)("[^"]*"|'[^']*'|[^\\s&,;)"'\\]}]+)`, 'gi'), kvReplace],
   ['email', /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, '[email]'],
   ['arn', /(\barn:aws[a-z-]*:[a-z0-9-]*:[a-z0-9-]*:)\d{12}(?=:)/g, '$1[account]'],
   ['home', /(\/Users\/|\/home\/|[A-Za-z]:\\Users\\)[^\s/\\:"']+/g, (m, p) => (p.includes('\\') ? 'C:\\Users\\[user]' : `${p}[user]`)],

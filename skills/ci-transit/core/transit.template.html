@@ -456,10 +456,37 @@ const spansAt = (n) => spans.filter((s) => nodeOf(s) === n.id);
 // matrices stack dozens of stations per column, so labels there are narrowed to the column spacing and placed
 // greedily (failed stations first, then map order, skipped last); a label that would overlap one already placed
 // is dropped. The station stays on the map and stays named in the side list and the panel.
+// A single-job CI run puts every step on one row ~20 px apart: horizontal labels there were cut to "Set ..."
+// and every other one dropped. Such a row gets labels rotated up-right (60 deg), one per station, each cut only
+// to the room above and to the right edge; the full name stays in the side list and the panel.
+const ROT = -Math.PI / 3;
+function oneRowCi() {
+  if (!CI_STEPS) return false;
+  const steps = order.filter((n) => n.ciStep);
+  if (steps.length < 6 || steps.some((n) => Math.abs(n.y - steps[0].y) > 2)) return false;
+  const xs = steps.map((n) => n.x).sort((a, b) => a - b);
+  return xs.slice(1).some((x, i) => x - xs[i] < 130);   // crowded: a horizontal label would be cut or dropped
+}
 let LABELS = null;
 function labelPlan() {
   if (LABELS) return LABELS;
   LABELS = new Map();
+  if (oneRowCi()) {
+    ctx.font = font(700, 13); ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    const sin = -Math.sin(ROT), cos = Math.cos(ROT);
+    let stack = 0;
+    for (const n of order) {
+      if (!n.ciStep) {   // run and job stations: horizontal, ending at the station, stacked upward left of the rotated labels
+        ctx.font = font(700, 15); const name = fitText(n.label || n.id, 150), w = ctx.measureText(name).width;
+        LABELS.set(n, { name, bx: n.x - w - 22 + 6, ly: n.y + n.top - 9 - 10 - 20 * stack++ }); ctx.font = font(700, 13); continue;
+      }
+      const ax = n.x + 4, ay = n.y + n.top - 9 - 8;
+      const room = Math.min(260, (ay - 24) / sin, (STAGE.width - 8 - ax) / cos);
+      const name = fitText((n.label || n.id) + (n.skipped ? ` · ${V.skipped}` : ''), Math.max(24, room));
+      LABELS.set(n, { name, ax, ay, rot: true });
+    }
+    return LABELS;
+  }
   const r = 9, colGap = L > 1 ? (G.right - G.left - NODE_W) / (L - 1) : Infinity;
   const maxW = CI_STEPS ? Math.max(48, Math.min(150, colGap - 34)) : 150;
   const tier = (n) => spansAt(n).some((s) => s.status === 'error') ? 0 : n.skipped ? 2 : 1;
@@ -492,12 +519,16 @@ function drawStations(tm) {
     // label: bullet + name above the station
     const lab = labelPlan().get(n);
     ctx.globalAlpha = n.skipped ? 0.28 : visited ? 1 : 0.35;
-    if (lab) {
+    if (lab && lab.rot) {
+      ctx.save(); ctx.translate(lab.ax, lab.ay); ctx.rotate(ROT);
+      ctx.fillStyle = C.ink; ctx.font = font(700, 13); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(lab.name, 0, 0); ctx.restore();
+    } else if (lab) {
       bullet(lab.bx + 8, lab.ly - 5, 8, n);
       ctx.fillStyle = C.ink; ctx.font = font(700, 15); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
       ctx.fillText(lab.name, lab.bx + 21, lab.ly);
     }
-    if (n.skipped && CI_STEPS) { ctx.font = font(400, 10); ctx.fillStyle = C.ink2; ctx.textAlign = 'center'; ctx.fillText(V.skipped, n.x, n.y + n.bot + r + 13); }
+    if (n.skipped && CI_STEPS && !(lab && lab.rot)) { ctx.font = font(400, 10); ctx.fillStyle = C.ink2; ctx.textAlign = 'center'; ctx.fillText(V.skipped, n.x, n.y + n.bot + r + 13); }
     if (n.inferred) { ctx.font = font(400, 11); ctx.fillStyle = C.ink2; ctx.textAlign = 'center'; ctx.fillText(n.sub ? `${V.infrastructure} · ${n.sub}` : V.infrastructure, n.x, n.y + n.bot + r + 14); }
     ctx.globalAlpha = 1;
   }
@@ -529,19 +560,29 @@ function alertsFitRight(n) {
   return fits;
 }
 const MAX_MARKERS = 3;
+// vertical room below a leaf station before the next station on that side (its markers start 10 px above it)
+function roomBelow(n, right) {
+  let room = Infinity;
+  for (const m of order) if (m !== n && m.y > n.y && (right ? m.x > n.x - 40 && m.x < n.x + 260 : m.x < n.x + 40 && m.x > n.x - 260)) room = Math.min(room, m.y - n.y);
+  return room;
+}
 function drawAlerts(tm) {
   for (const n of order) {
     // leaf stations: markers sit to the right, on the station's own row; otherwise below the station
     const leaf = outE.get(n.id).length === 0 && !(CI_STEPS && n.x > 820);
     const right = leaf && alertsFitRight(n), left = leaf && !right;   // left: mirror image, for leaves near the right edge
-    let y = right || left ? n.y - 10 : n.y + n.bot + 9 + (n.inferred ? 20 : 8);
+    const bot = CI_STEPS && oneRowCi() ? Math.max(...order.filter((m) => Math.abs(m.y - n.y) < 3 && Math.abs(m.x - n.x) < 120).map((m) => m.bot)) : n.bot;
+    let y = right || left ? n.y - 10 : n.y + bot + 9 + (n.inferred ? 20 : 8);
     const ax = (w) => right ? n.x + 18 + w / 2 : left ? n.x - 18 - w / 2 : n.x;
     const ciStep = (s) => !CI_STEPS || s.attrs && s.attrs['ci.step.number'] != null;
     let slow = spansAt(n).filter((s) => ciStep(s) && s.slow && tm >= s.slowAt);
     let errs = spansAt(n).filter((s) => ciStep(s) && s.errOrigin && tm >= s.end);
     // at most MAX_MARKERS per station (alerts first), then one "+N more" line; the side list has the rest
-    const extra = slow.length + errs.length - MAX_MARKERS;
-    if (extra > 0) { errs = errs.slice(0, MAX_MARKERS); slow = slow.slice(0, MAX_MARKERS - errs.length); }
+    // a leaf's markers stack down its own row toward the next station row: keep only what fits above it
+    const cap = right || left ? Math.max(1, Math.min(MAX_MARKERS, Math.floor((roomBelow(n, right) + 6) / 44))) : MAX_MARKERS;
+    const extra = slow.length + errs.length - cap;
+    if (extra > 0) { errs = errs.slice(0, cap); slow = slow.slice(0, cap - errs.length); }
+    let lastBox = null;
     for (const s of slow) {
       const ms = Math.min(tm, s.end) - s.start;
       const txt = `${V.delay}  ${fmtMs(ms)}`;
@@ -549,6 +590,7 @@ function drawAlerts(tm) {
       const cx = ax(w); rr(cx - w / 2, y, w, 20, 10); ctx.fillStyle = C.slow; ctx.fill();
       ctx.fillStyle = C.slowInk; ctx.beginPath(); ctx.arc(cx - w / 2 + 11, y + 10, 4, 0, 2 * Math.PI); ctx.fill();
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, cx - w / 2 + 20, y + 10.5);
+      lastBox = { l: cx - w / 2, r: cx + w / 2, y };
       y += 25;
     }
     for (const s of errs) {
@@ -562,12 +604,19 @@ function drawAlerts(tm) {
       ctx.font = font(400, 12); const ww = ctx.measureText(why).width, wx = right ? cx - w / 2 : left ? cx + w / 2 - ww : cx - ww / 2;
       ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.fillRect(wx - 3, y + 23, ww + 6, 15);
       ctx.fillStyle = C.err; ctx.textAlign = 'left'; ctx.fillText(why, wx, y + 34);
+      lastBox = { l: cx - w / 2, r: cx + w / 2, y };
       y += 44;
     }
     if (extra > 0) {
       ctx.font = font(700, 11); ctx.fillStyle = C.ink2; ctx.textBaseline = 'middle';
       const more = `+${extra} ${V.more}`;
-      ctx.textAlign = right ? 'left' : left ? 'right' : 'center'; ctx.fillText(more, right ? n.x + 18 : left ? n.x - 18 : n.x, y + 6);
+      // capped leaf: beside the last box, on its line (below would run into the next row)
+      if (cap < MAX_MARKERS && lastBox) {
+        const mw = ctx.measureText(more).width, mx = right ? lastBox.r + 6 : lastBox.l - 6 - mw - 4;
+        ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fillRect(mx, lastBox.y + 3, mw + 4, 15);
+        ctx.fillStyle = C.ink2; ctx.textAlign = 'left'; ctx.fillText(more, mx + 2, lastBox.y + 10.5);
+      }
+      else { ctx.textAlign = right ? 'left' : left ? 'right' : 'center'; ctx.fillText(more, right ? n.x + 18 : left ? n.x - 18 : n.x, y + 6); }
     }
   }
 }
@@ -661,6 +710,7 @@ function drawStrip(tm) {
   ctx.font = font(400, 11); ctx.fillStyle = C.ink2; ctx.textBaseline = 'alphabetic';
   for (let i = 0; i <= 4; i++) { const ms = TOTAL * i / 4; ctx.textAlign = i === 0 ? 'left' : i === 4 ? 'right' : 'center'; ctx.fillText(fmtMs(ms), sx(ms), SY + 46); }
 }
+const SHOW_CONTRACTS = V.contractFooter !== false || !!window.CONTRACTS;   // contracts exist only for request traces
 const footCalls = calls.filter((c) => !c.ciExtra);   // CI needs connectors are not dependencies of their own
 const infraHops = footCalls.filter((c) => nodes.get(c.to).inferred).length;
 function drawFooter() {
@@ -703,8 +753,8 @@ if (hopsEl) {
       const stepSpans = allSteps.sort((a, b) => jobFirst.get(a.attrs['ci.job']) - jobFirst.get(b.attrs['ci.job']) || String(a.attrs['ci.job']).localeCompare(String(b.attrs['ci.job'])) || a.attrs['ci.step.number'] - b.attrs['ci.step.number']);
       return `<h3>${V.tableTitle}</h3><table><tr><th>${V.tableStart}</th><th>${V.lineNoun}</th><th>${V.tableSpan}</th><th>${V.tableStatus}</th></tr>` + stepSpans.map((s) => `<tr data-ci-step="${esc(s.spanId)}"><td>${fmtMs(s.start)}</td><td>${esc(s.attrs['ci.job'])}</td><td>${esc(s.name)}</td><td>${s.status === 'unset' ? V.skipped : s.status === 'error' ? V.error : s.slow ? V.slow : V.ok}</td></tr>`).join('') + '</table>';
     })()
-    : `<h3>${V.tableTitle}</h3><table><tr><th>${V.tableStart}</th><th>${V.tableFrom}</th><th>${V.tableTo}</th><th>${V.tableSpan}</th><th>${V.tableStatus}</th><th>${V.tableContract}</th></tr>` +
-      hops.map((c) => `<tr><td>${fmtMs(c.start)}</td><td>${esc(c.from)}</td><td>${esc(c.to)}</td><td>${esc(c.span.name)}</td><td>${c.error ? V.error : c.slow ? V.slow : V.ok}</td><td>${(() => { const m = window.CONTRACTS && (window.CONTRACTS.bySpan[c.callee.spanId] || window.CONTRACTS.bySpan[c.span.spanId]); if (!window.CONTRACTS) return nodes.get(c.to).inferred ? V.infrastructureHop : V.unmatchedContracts; if (!m) return nodes.get(c.to).inferred ? V.infrastructureHop : V.unmatchedShort; return m.state === 'unmatched' ? V.unmatchedShort + ': ' + esc(m.reason) : m.state === 'infra' ? V.infrastructureHop : esc(m.state + ' ' + m.key); })()}</td></tr>`).join('') + '</table>');
+    : `<h3>${V.tableTitle}</h3><table><tr><th>${V.tableStart}</th><th>${V.tableFrom}</th><th>${V.tableTo}</th><th>${V.tableSpan}</th><th>${V.tableStatus}</th>${SHOW_CONTRACTS ? `<th>${V.tableContract}</th>` : ''}</tr>` +
+      hops.map((c) => `<tr><td>${fmtMs(c.start)}</td><td>${esc(c.from)}</td><td>${esc(c.to)}</td><td>${esc(c.span.name)}</td><td>${c.error ? V.error : c.slow ? V.slow : V.ok}</td>${!SHOW_CONTRACTS ? '' : `<td>${(() => { const m = window.CONTRACTS && (window.CONTRACTS.bySpan[c.callee.spanId] || window.CONTRACTS.bySpan[c.span.spanId]); if (!window.CONTRACTS) return nodes.get(c.to).inferred ? V.infrastructureHop : V.unmatchedContracts; if (!m) return nodes.get(c.to).inferred ? V.infrastructureHop : V.unmatchedShort; return m.state === 'unmatched' ? V.unmatchedShort + ': ' + esc(m.reason) : m.state === 'infra' ? V.infrastructureHop : esc(m.state + ' ' + m.key); })()}</td>`}</tr>`).join('') + '</table>');
 }
 // ------------------------------------------------------------------ interactive layer (never runs in render mode)
 // renderAt(t) above stays a pure function of t. Selection, speed and the panel live here and only draw an

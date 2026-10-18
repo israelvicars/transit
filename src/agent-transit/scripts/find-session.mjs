@@ -20,7 +20,9 @@ if (source === 'cursor') {
       try { if (statSync(path).isFile()) matches.push({ path, mtime: mtime(path) }); } catch {}
     }
   }
-  const match = newest(matches); if (match) console.log(match.path);
+  const match = newest(matches);
+  if (match) console.log(match.path);
+  else console.error('no Cursor agent-transcripts found; Cursor keeps chats in its state.vscdb instead. Export one (metadata only): node <skill>/scripts/export-cursor.mjs --list, then --composer ID');
 } else if (source === 'codex') {
   const root = join(home, '.codex', 'sessions'), matches = [];
   const walk = (dir) => {

@@ -23,7 +23,11 @@ A local subway map for one AI coding-agent session: tool families are lines and 
 3. Share it with the bundled renderer: `node <skill>/core/render.mjs <session.jsonl> --format claude-code --name agent`.
 4. Check it with the bundled verifier: `node <skill>/core/verify.mjs <session.jsonl> --format claude-code --name agent`.
 
-Use `--format codex` or `--format cursor` for those sources. Cursor transcripts provide order only, with uniform synthetic durations because they have no timestamps or results. Keep session files local and never upload them. Synthetic fixtures are provided in `samples/`; no real home-directory logs belong in this repository.
+Use `--format codex` or `--format cursor` for those sources.
+
+Cursor: most Cursor installs keep chats only in `state.vscdb`, not as transcripts. Export one composer to a metadata-only JSONL (tool name, status, file basename or command word, timestamps; never message text, params or results), opened read-only:
+`node <skill>/src/agent-transit/scripts/export-cursor.mjs --list` (sessions for the current workspace; `--workspace DIR` or `--all-workspaces`), then `node <skill>/src/agent-transit/scripts/export-cursor.mjs --composer <id or prefix> --out ./transit-out/agent/cursor.cursor.jsonl`, and build that with `--format cursor`.
+Cursor builds since about Sep 2025 stamp each message bubble with `createdAt`, so calls start at real times; Cursor stores no tool end time, so each call ends at the next message (an upper bound). Older bubbles and `agent-transcripts` files have no timestamps: order only, with uniform synthetic durations. Keep session files local and never upload them. Synthetic fixtures are provided in `samples/`; no real home-directory logs belong in this repository.
 
 ## Rules
 

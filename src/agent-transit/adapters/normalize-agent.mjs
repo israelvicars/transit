@@ -14,6 +14,10 @@ const FAMILIES = new Map([
   ['skill', 'skill'], ['todowrite', 'plan'], ['update_plan', 'plan'], ['notebookedit', 'edit'],
   ['strreplace', 'edit'], ['delete', 'edit'], ['editnotebook', 'edit'],
   ['semanticsearch', 'read'], ['readlints', 'read'],
+  // Cursor IDE composer tool names (toolFormerData.name in state.vscdb)
+  ['read_file', 'read'], ['list_dir', 'read'], ['grep_search', 'read'], ['ripgrep', 'read'], ['file_search', 'read'], ['glob_file_search', 'read'],
+  ['codebase_search', 'read'], ['read_lints', 'read'], ['search_replace', 'edit'], ['edit_file', 'edit'], ['edit_file_v2_apply_patch', 'edit'],
+  ['delete_file', 'edit'], ['run_terminal_cmd', 'shell'], ['todo_write', 'plan'], ['update_memory', 'plan'], ['fetch_pull_request', 'web'],
 ]);
 const isoMs = (x) => {
   if (x == null) return null;
@@ -25,18 +29,19 @@ const key = (name) => String(name || '').toLowerCase();
 const family = (name) => {
   const n = key(name);
   if (FAMILIES.has(n)) return FAMILIES.get(n);
-  return n.startsWith('mcp__') || n.includes('.') ? 'mcp' : 'other';
+  return n.startsWith('mcp__') || n.startsWith('mcp_') || n.includes('.') ? 'mcp' : 'other';
 };
 const contentText = (x) => Array.isArray(x) ? x.map((b) => typeof b === 'string' ? b : b && (b.text || b.content || '')).join(' ') : String(x ?? '');
 const denied = (x) => /\b(denied|permission denied|not allowed|rejected|approval required)\b/i.test(contentText(x));
 const errorText = (x) => /\b(error|failed|failure|exception)\b/i.test(contentText(x));
 const basenameTarget = (name, args) => {
   const a = args && typeof args === 'object' ? args : {};
-  const path = a.file_path || a.filePath || a.path || a.filename || a.target_file;
+  const path = a.file_path || a.filePath || a.path || a.filename || a.target_file || a.relativeWorkspacePath || a.relative_workspace_path || a.targetFile
+    || a.directoryPath || a.targetDirectory || a.target_directory || a.globPattern || a.glob_pattern;
   if (path) return basename(String(path));
   const command = typeof args === 'string' ? args : a.command || a.cmd || a.script;
   if (command) return String(command).trim().split(/\s+/)[0].slice(0, 40);
-  const query = a.pattern || a.query || a.url;
+  const query = a.pattern || a.query || a.url || a.searchTerm || a.search_term;
   return query ? String(query).trim().split(/\s+/)[0].slice(0, 40) : '';
 };
 const shortName = (name, args) => `${String(name || 'tool')}${basenameTarget(name, args) ? ` · ${basenameTarget(name, args)}` : ''}`.slice(0, 40);
@@ -50,7 +55,7 @@ const linesOf = (doc) => Array.isArray(doc) ? doc : String(doc).split(/\r?\n/).f
 
 export function isAgentLog(doc) {
   const lines = Array.isArray(doc) ? doc : [];
-  return !!lines.length && (isMarker(lines[0]) || lines.some((x) => x && (x.type === 'session_meta' || x.type === 'response_item' || x.role === 'assistant' || x.role === 'user')));
+  return !!lines.length && (isMarker(lines[0]) || lines.some((x) => x && (x.type === 'session_meta' || x.type === 'response_item' || x.role === 'assistant' || x.role === 'user')) || lines.slice(0, 5).some(isBubble));
 }
 
 function claudeEvents(lines, format, warnings) {
@@ -114,7 +119,47 @@ function codexEvents(lines, warnings) {
   return [...calls.values()].map((c) => ({ ...c, result: results.get(c.id) })).filter((c) => c.start != null);
 }
 
+// Cursor IDE composer bubbles (exported by scripts/export-cursor.mjs, or any dump of state.vscdb bubble records):
+// {bubbleId, type: 1 user | 2 assistant, createdAt ISO, timingInfo {clientRpcSendTime, clientEndTime}, toolFormerData {name, status, params}}.
+// A tool call starts at its bubble's createdAt. Cursor stores no tool end time, so it ends at the next bubble's
+// createdAt, capped by the turn's clientEndTime: an upper bound that includes the model's next step.
+// Bubbles from Cursor builds before ~Sep 2025 have no createdAt: order only, uniform durations.
+const isBubble = (l) => l && typeof l === 'object' && typeof l.bubbleId === 'string' && typeof l.type === 'number';
+const parseObj = (x) => { if (x && typeof x === 'object') return x; try { const o = JSON.parse(x); return o && typeof o === 'object' ? o : {}; } catch { return {}; } };
+function cursorBubbleEvents(lines, warnings) {
+  const bubbles = lines.filter(isBubble);
+  const t = bubbles.map((b) => isoMs(b.createdAt));
+  const tools = bubbles.map((b, i) => [b, i]).filter(([b]) => b.toolFormerData && b.toolFormerData.name);
+  const timed = tools.length > 0 && tools.every(([, i]) => t[i] != null);
+  const events = []; let turnEnd = null;
+  // Bubbles created within a few ms of each other belong to one model step: parallel tool calls, and the empty
+  // assistant placeholder Cursor creates right after each call (seen on every call in real sessions). A call ends at
+  // the first bubble after that burst.
+  const BURST_MS = 300;
+  const endOf = (i) => {   // next later timestamp after the burst, capped by the turn end
+    let j = i + 1;
+    while (j < bubbles.length && bubbles[j].type !== 1 && t[j] != null && t[j - 1] != null && t[j] - t[j - 1] < BURST_MS) j++;
+    for (; j < bubbles.length; j++) if (t[j] != null && t[j] >= t[i]) return turnEnd != null && turnEnd >= t[i] ? Math.min(t[j], turnEnd) : t[j];
+    return turnEnd != null && turnEnd >= t[i] ? turnEnd : t[i];
+  };
+  bubbles.forEach((b, i) => {
+    if (b.type === 1) turnEnd = null;
+    const te = b.timingInfo && isoMs(b.timingInfo.clientEndTime);
+    if (te != null && te > 1e12) turnEnd = te;
+    const tf = b.toolFormerData;
+    if (!tf || !tf.name) return;
+    const n = events.length, start = timed ? t[i] : n * 1250, end = timed ? endOf(i) : start + 1000;
+    const st = String(tf.status || '').toLowerCase();
+    events.push({ id: `cursor-${n + 1}`, name: tf.name, args: { ...parseObj(tf.rawArgs), ...parseObj(tf.params) }, start, cursor: true,
+      result: { end, error: st === 'error', denied: st === 'cancelled' || st === 'rejected', cancelled: st === 'cancelled' } });
+  });
+  warnings.push(timed ? 'Cursor session: tool calls start at their bubble createdAt; Cursor stores no tool end time, so each ends at the next message (an upper bound)'
+    : 'Cursor session without bubble timestamps (Cursor builds before ~Sep 2025): order only, durations are uniform');
+  return events;
+}
+
 function cursorEvents(lines, warnings) {
+  if (lines.some(isBubble)) return cursorBubbleEvents(lines, warnings);
   const calls = [], turnCalls = [];
   for (const line of lines) {
     if (line.type === 'turn_ended') {
@@ -148,7 +193,7 @@ export function normalizeAgent(doc, options = {}) {
     if (e.wrapper) attrs['agent.wrapper'] = e.wrapper;
     if (e.sidechain) attrs['agent.sidechain'] = true;
     const s = { spanId: `tool-${e.id}`, parentId: rootId, service: e.wrapper === 'exec' ? family(e.name) : family(e.name), name: shortName(e.name, e.args), start: Math.max(0, e.start - startMs), duration: Math.max(0, end - e.start), status, kind: 'internal', attrs };
-    if (status === 'error') s.statusMessage = result.denied ? 'denied' : 'tool error';
+    if (status === 'error') s.statusMessage = result.cancelled ? 'cancelled' : result.denied ? 'denied' : 'tool error';
     if (options.showArgs) s.attrs['agent.args'] = safeArgs(e.args);
     raw.push(s);
   }
