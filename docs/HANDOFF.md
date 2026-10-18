@@ -109,3 +109,24 @@ Gates: npm run check passes; MP4 identical; request UI PNGs identical. docs/ci.g
 
 ## Footer dependency count: done (8278882)
 Hand fix, 0 Codex tokens. drawFooter counts calls without ciExtra connectors, so the ci sample footer reads 12 dependencies (it was 14). Non-ci pages have no connectors, so their count is unchanged. npm run check passes; MP4 identical; request UI PNGs identical. docs/ci.gif regenerated (463,309 B). Then main was fast-forwarded to suite and pushed (user approved).
+
+## Pre-launch exercise (2026-10-18, run on the box; the laptop was offline)
+Public or self-generated data only. No employer data or accounts were used.
+- ci-transit live, on public runs via the REST API. The box has no gh login, so a test shim emulated `gh run view/list --json` (/workspace/fakebin/gh, not committed). Runs used: vercel/next.js 39099529923 (Rspack dev integration tests, 36 jobs / 1708 steps / 23 failed), vercel/next.js 39082402261 (Update Font Data, 1 job, 12 steps), and nodejs/node 39098491291 via the new `--last-failed`.
+  Bugs fixed:
+  1. fetch.mjs had a SyntaxError (backticks inside a template literal), so the published fetch script never ran.
+  2. GitHub's zero time `0001-01-01T00:00:00Z` on skipped steps made t0 year 1, so the clock read ~6e10 s. Times before 2000 now count as unset.
+  3. Large runs were unreadable (1708 step stations). Above 150 steps, only failed or cancelled steps stay as stations, with a warning; `--max-steps 0` (build/render flag) shows all.
+  4. New `fetch.mjs --last-failed [--workflow] [--branch]` (read-only `gh run list`), documented in SKILL.md.
+  5. test-gh/test-agent hardcoded /private/tmp (macOS only); they now use os.tmpdir().
+  Tests added to test-gh: zero-time steps, large-run collapse, --max-steps 0.
+- Fresh install from GitHub (box, Linux): `npx skills add israelvicars/transit --skill <each>` worked, and each skill rendered its sample to HTML+GIF+MP4. Claude Code `plugin marketplace add israelvicars/transit` + `plugin install transit@transit` installed under a throwaway HOME, and the installed ci-transit built its sample.
+- Adapters on public/self-made data (all built OK, one root, errors preserved):
+  - OTLP: real spans from a tiny local Node OTel app (4 services, http instrumentation, OTLP/HTTP JSON to a local receiver), 12 spans, rendered.
+  - Tempo v2 (hex and base64 ids) and v1 `batches`: the same real trace re-wrapped.
+  - PostHog: the same trace reshaped to the documented apm-trace-get fields.
+  - Datadog v1: the same trace reshaped.
+  - Datadog v2: the documented SpansAttributes example values from the public OpenAPI spec.
+  - X-Ray: verbatim examples from the AWS segment-document docs (embedded subsegment; plus SQL and DynamoDB fault subsegments).
+- README links and images all resolve on GitHub (hero/ci/agent GIFs, skill READMEs).
+- Still untested: live API fetches (Datadog/PostHog/X-Ray/Tempo) and `gh` itself (the shim emulated it); Jaeger JSON (no adapter); the macOS MP4 hash gate for these fixes, since `npm run check` must be run on the laptop.

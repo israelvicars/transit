@@ -37,7 +37,7 @@ export function build(file, opt = {}) {
     doc = input.split(/\r?\n/).filter(Boolean).map((line) => parseJsonSafe(line));
   }
   const adapter = pickAdapter(doc, opt.format);
-  const trace = adapter.normalize(doc, { format: adapter.format, traceId: opt['trace-id'], showArgs: !!opt['show-args'] });
+  const trace = adapter.normalize(doc, { format: adapter.format, traceId: opt['trace-id'], showArgs: !!opt['show-args'], maxSteps: opt['max-steps'] != null ? Number(opt['max-steps']) : undefined });
   redact(trace, opt.redact ? String(opt.redact).split(',') : [], !opt['no-default-redact']);
   const vizOpts = {};
   if (opt.title) vizOpts.title = opt.title;

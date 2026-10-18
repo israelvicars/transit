@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { build } from '../../../core/build.mjs';
@@ -32,7 +33,7 @@ for (const format of ['claude-code', 'codex', 'cursor']) {
     assert.equal(tools[12].status, 'error');
     assert.ok(trace.meta.warnings.includes('Cursor transcripts have no timestamps or results: order only, durations are uniform'));
   }
-  const out = `/private/tmp/transit-agent-${format}.html`;
+  const out = join(tmpdir(), `transit-agent-${format}.html`);
   const built = build(file, { format, out });
   const html = readFileSync(built.out, 'utf8');
   for (const marker of canaries) assert.doesNotMatch(html, new RegExp(marker));

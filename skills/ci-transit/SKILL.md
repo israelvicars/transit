@@ -17,7 +17,7 @@ A public transit map for a GitHub Actions run.
 
 ## Steps
 
-1. **Get one run into a file.** Use `node <skill>/src/ci-transit/scripts/fetch.mjs <run-id> [--repo owner/name] [--out run.json]`. It invokes the local `gh run view` command read-only. Or provide a synthetic or previously saved run JSON file shaped like `gh run view --json ...`.
+1. **Get one run into a file.** Use `node <skill>/src/ci-transit/scripts/fetch.mjs <run-id> [--repo owner/name] [--out run.json]`, or `--last-failed [--workflow name] [--branch b]` instead of a run id for the newest failed run. It invokes the local `gh run list` / `gh run view` commands read-only. Runs with more than 150 steps show only failed or cancelled steps as stations; pass `--max-steps 0` to build/render to show all. Or provide a synthetic or previously saved run JSON file shaped like `gh run view --json ...`.
 2. **Build the interactive page:** `node <skill>/core/build.mjs <run.json> --format gh-actions --out ./transit-out/ci/transit.html --title "CI: one run" --subtitle "SYNTHETIC sample data"`.
 3. **Share it (MP4 + GIF):** `node <skill>/core/render.mjs <run.json> --format gh-actions --name ci --out-dir ./transit-out/ci --title "CI: one run" --subtitle "SYNTHETIC sample data"`.
 4. **Check it:** `node <skill>/core/verify.mjs <run.json> --format gh-actions --name ci`.

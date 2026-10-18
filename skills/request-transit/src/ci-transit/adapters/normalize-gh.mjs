@@ -6,15 +6,21 @@ export function isGitHubActionsRun(doc) {
   return !!doc && typeof doc === 'object' && Array.isArray(doc.jobs) && doc.jobs.some((j) => Array.isArray(j.steps));
 }
 
-const ns = (value) => value == null ? null : BigInt(new Date(value).getTime()) * 1000000n;
+// GitHub reports unset times as null or the zero time 0001-01-01T00:00:00Z (seen on skipped steps of real runs).
+const ns = (value) => { if (value == null) return null; const ms = new Date(value).getTime(); return Number.isFinite(ms) && ms > 946684800000 ? BigInt(ms) * 1000000n : null; };
+const MAX_STEPS = 150;   // above this many steps in one run, only failed/cancelled steps stay as stations
 const statusFor = (conclusion) => conclusion === 'failure' || conclusion === 'cancelled' ? 'error' : conclusion === 'skipped' ? 'unset' : 'ok';
 const id = (prefix, value) => `${prefix}-${String(value)}`;
 
-export function normalizeGh(doc) {
+export function normalizeGh(doc, options = {}) {
   if (typeof doc === 'string') doc = parseJsonSafe(doc);
   if (!isGitHubActionsRun(doc)) throw new Error('unrecognized GitHub Actions run: expected jobs[] with steps[]');
   const warnings = [];
   const jobs = doc.jobs;
+  const maxSteps = options.maxSteps ?? MAX_STEPS;
+  const totalSteps = jobs.reduce((n, j) => n + (j.steps || []).length, 0);
+  const collapse = maxSteps > 0 && totalSteps > maxSteps;
+  if (collapse) warnings.push(`large run: ${totalSteps} steps; showing only failed or cancelled steps as stations (pass --max-steps 0 to show all)`);
   const runStart = ns(doc.startedAt || doc.createdAt);
   if (runStart == null) throw new Error('GitHub Actions run is missing startedAt/createdAt');
   const spanData = [];
@@ -39,6 +45,7 @@ export function normalizeGh(doc) {
     let previousEndNs = start;
     for (const [stepIndex, st] of (j.steps || []).entries()) {
       const conclusion = st.conclusion || st.status;
+      if (collapse && conclusion !== 'failure' && conclusion !== 'cancelled') continue;
       let startNs = ns(st.startedAt), endNs = ns(st.completedAt);
       if (conclusion === 'skipped') {
         // GitHub commonly omits timestamps for skipped steps. Keep their station
