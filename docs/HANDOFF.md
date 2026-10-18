@@ -141,3 +141,13 @@ Applied the box patch as aba3cc0. `npm run check` passes on the laptop; MP4 iden
 - Docker Desktop is installed, but the daemon isn't responding (`docker info` hangs), so OTel Demo/HotROD/Tempo compose were not run.
 - Follow-ups: idle-gap compression for long agent sessions (609 calls over 13 h means mostly empty animation); label crowding on wide CI matrices.
 - `npm run check` passes; MP4 identical.
+
+## 2026-10-18 idle gaps, CI label crowding, Jaeger/Tempo/telemetrygen exercise: done
+- Docker Desktop restarted. `docker pull` hung on the `desktop` credential helper; public pulls work with `DOCKER_CONFIG=/tmp/dockercfg` (`{"cliPluginsExtraDirs":[...]}`, no credsStore). Lightdash containers came up with Docker (user's, untouched).
+- core/gaps.mjs + core/test-gaps.mjs: agent (cap 3 s) and CI (cap 20 s) maps shorten idle stretches; `--max-gap-ms N|0`. Header shows "N idle gaps shortened"; root keeps `transit.wall_ms`. Not applied to request traces. Real local sessions (counts only): Claude Code 96 s wall → 46 s, Codex 87 s → 54 s.
+- Template, CI only: station labels narrowed to column spacing and placed greedily (failed first, skipped last), overlapping labels dropped (vscode 38-job run: the label pile is gone; the side list and legend still name every station).
+- Template, all maps but no-op on the request sample: leaf alerts that would run off the right edge go to the left of the station on its row (HotROD, agent `shell`); max 3 markers per station + "+N more" (telemetrygen 20-error trace); niceCeil float noise fixed ("0.30000000000000004 ms of trace").
+- normalize.mjs: Jaeger v2 `/api/v3/traces` (`{result:{resourceSpans}}`) auto-detected as `jaeger`; no separate Jaeger adapter needed. fetch-tempo `--find` pads trace ids to 32 hex and prints `<1ms` for omitted zero durations.
+- Live: Jaeger v2.22 all-in-one + HotROD (40-span trace OK); telemetrygen → Jaeger (2001-span single trace, 3x20 error traces with links, 539 traces in one response, 12 MB attribute payload: all build <0.1 s, no page errors); Tempo 3.0 single-binary compose example (tempo+alloy+k6-tracing) + live `fetch.mjs tempo --find` and fetch-by-id. OTel Demo skipped: Docker VM 8 GB, disk 91% full. Containers removed.
+- Gates: npm run check passes; OTel MP4 sha256 223590ce… and GIF bed864e9… unchanged. Agent sample film changed (gap + left-placed alert), CI sample film unchanged.
+- Known, not fixed: single-service traces (telemetrygen) draw one station and an empty hop list; CI legend overflows past ~20 jobs.

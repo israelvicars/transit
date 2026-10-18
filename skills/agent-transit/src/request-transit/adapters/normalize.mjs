@@ -23,10 +23,11 @@
 //   tempo      Grafana Tempo trace-by-id: v1 /api/traces/<id> ({batches:[ResourceSpans]}) or
 //              v2 /api/v2/traces/<id> ({trace:{resourceSpans|batches}, status?}); OTLP inside, ids base64
 //              (protobuf-JSON) or hex, enums as strings or numbers, scopeSpans or instrumentationLibrarySpans
+//   jaeger     Jaeger v2 query API /api/v3/traces[/<id>] ({result:{resourceSpans:[...]}}): OTLP inside
 //   xray       AWS X-Ray BatchGetTraces response or segment documents (segments + nested subsegments)
 //   internal   already-normalized JSON (passed through and re-validated)
 //
-// CLI: node normalize.mjs <trace.json> [--format otlp|tempo|posthog|xray|datadog|datadog-v2|internal] [--trace-id ID]
+// CLI: node normalize.mjs <trace.json> [--format otlp|jaeger|tempo|posthog|xray|datadog|datadog-v2|internal] [--trace-id ID]
 //      prints the normalized JSON to stdout
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -41,6 +42,7 @@ export function parseJsonSafe(text) {
 
 export function detectFormat(doc) {
   if (doc && Array.isArray(doc.resourceSpans)) return 'otlp';
+  if (doc && doc.result && Array.isArray(doc.result.resourceSpans)) return 'jaeger';
   if (tempoResourceSpans(doc)) return 'tempo';
   const xr = isXray(doc);
   if (xr === 'summaries') throw new Error('this is GetTraceSummaries output (trace ids only, no segments): fetch the segments with `aws xray batch-get-traces --trace-ids <Id>` or scripts/fetch.mjs xray <Id>');
@@ -53,7 +55,7 @@ export function detectFormat(doc) {
     : doc && Array.isArray(doc.spans) ? doc.spans[0] : null;
   if (first && 'span_id' in first && 'trace_id' in first) return 'datadog';
   if (first && 'spanId' in first && 'start' in first && 'duration' in first) return 'internal';
-  throw new Error('unrecognized trace format: expected OTLP JSON (resourceSpans), Grafana Tempo (batches / trace.resourceSpans), PostHog tracing spans (span_id/service_name/duration_nano), Datadog spans (trace_id/span_id), AWS X-Ray (BatchGetTraces / segment documents) or the internal schema');
+  throw new Error('unrecognized trace format: expected OTLP JSON (resourceSpans), Jaeger /api/v3 (result.resourceSpans), Grafana Tempo (batches / trace.resourceSpans), PostHog tracing spans (span_id/service_name/duration_nano), Datadog spans (trace_id/span_id), AWS X-Ray (BatchGetTraces / segment documents) or the internal schema');
 }
 
 // ---------------------------------------------------------------- Grafana Tempo
@@ -357,7 +359,7 @@ export function normalize(doc, { format, traceId } = {}) {
   if (typeof doc === 'string') doc = parseJsonSafe(doc);
   format = format || detectFormat(doc);
   if (format === 'internal') return validate(doc);
-  const { raw, source } = format === 'otlp' ? fromOtlp(doc) : format === 'tempo' ? fromTempo(doc) : format === 'posthog' ? fromPosthog(doc) : format === 'xray' ? fromXray(doc) : format === 'datadog' ? fromDatadog(doc) : fromDatadogV2(doc);
+  const { raw, source } = format === 'otlp' ? fromOtlp(doc) : format === 'jaeger' ? fromOtlp(doc.result || doc) : format === 'tempo' ? fromTempo(doc) : format === 'posthog' ? fromPosthog(doc) : format === 'xray' ? fromXray(doc) : format === 'datadog' ? fromDatadog(doc) : fromDatadogV2(doc);
   if (!raw.length) throw new Error('no spans found');
   const warnings = [...(raw.warnings || [])];
   // One trace per viz. Pick the requested one, else the trace with the most spans.

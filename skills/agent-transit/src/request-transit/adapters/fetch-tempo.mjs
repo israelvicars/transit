@@ -37,7 +37,7 @@ if ('find' in opt) {
   const r = await get(`/api/search?${q}`);
   if (!r.ok) { console.error(`Tempo ${r.status}: ${(await r.text()).slice(0, 400)}`); process.exit(1); }
   const body = await r.json();
-  for (const t of body.traces || []) console.log(`${t.traceID}  ${t.rootServiceName || '?'}  ${t.rootTraceName || ''}  ${t.durationMs ?? '?'}ms`);
+  for (const t of body.traces || []) console.log(`${String(t.traceID).padStart(32, '0')}  ${t.rootServiceName || '?'}  ${t.rootTraceName || ''}  ${t.durationMs ? t.durationMs + 'ms' : '<1ms'}`);   // search drops leading zeros and zero durations
   if (!(body.traces || []).length) console.error('no traces matched');
   process.exit(0);
 }

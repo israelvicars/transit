@@ -19,6 +19,7 @@ A local subway map for one AI coding-agent session: tool families are lines and 
 
 1. Find the newest local session path without reading its contents: `node <skill>/src/agent-transit/scripts/find-session.mjs --source claude-code|codex|cursor`.
 2. Build one map: `node <skill>/core/build.mjs <session.jsonl> --format claude-code --out ./transit-out/agent/transit.html --title "Agent: one coding session, tool by tool"`.
+   Idle stretches with nothing running (e.g. model thinking time between tool calls) longer than 3 s are shortened to 3 s so the animation isn't dead air; the header says how many were shortened and the root span keeps the wall time as `transit.wall_ms`. Pass `--max-gap-ms N` to change the cap, or `--max-gap-ms 0` for true wall-clock timing.
 3. Share it with the bundled renderer: `node <skill>/core/render.mjs <session.jsonl> --format claude-code --name agent`.
 4. Check it with the bundled verifier: `node <skill>/core/verify.mjs <session.jsonl> --format claude-code --name agent`.
 

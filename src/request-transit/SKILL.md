@@ -82,6 +82,10 @@ Open `transit-out/<name>/transit.html` in a browser. Video renders hide all of t
 - MCP (interactive): if the AWS Labs CloudWatch Application Signals MCP server is connected, call `get_xray_trace`, save the result to a file, then use the file. Check the saved shape first; it has not been verified live.
 - X-Ray samples about 5% of requests by default, so a specific request may have no trace.
 
+## Jaeger traces
+
+- File: Jaeger v2 serves OTLP JSON at `/api/v3/traces/<id>` (or `/api/v3/traces?query.service_name=...` for a search). Save the response and pass it straight to build/render; the `{result: ...}` wrapper is auto-detected as `jaeger`. A search response can hold many traces: the one with the most spans is used unless `--trace-id` is given.
+
 ## Grafana Tempo traces
 
 - File: pass a Tempo `/api/v2/traces/<id>` or `/api/traces/<id>` JSON response straight to build/render (auto-detected as `tempo`).

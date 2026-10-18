@@ -191,7 +191,8 @@ const hasErrBelow = (s) => kids.get(s.spanId).some((c) => c.status === 'error' |
 for (const s of spans) s.errOrigin = s.status === 'error' && !hasErrBelow(s);
 
 // time scale: a round number of trace ms per second of video
-function niceCeil(x) { const p = Math.pow(10, Math.floor(Math.log10(x))); for (const m of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * p >= x - 1e-9) return m * p; return 10 * p; }
+// toPrecision strips float noise for sub-ms traces (3 * 0.1 = 0.30000000000000004)
+function niceCeil(x) { const p = Math.pow(10, Math.floor(Math.log10(x))); for (const m of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * p >= x - 1e-9) return Number((m * p).toPrecision(12)); return Number((10 * p).toPrecision(12)); }
 const MS_PER_SEC = OPT.msPerSec || niceCeil(TOTAL / (OPT.targetSeconds || 9));
 const SECONDS = Math.ceil((INTRO + TOTAL / MS_PER_SEC + OUTRO) * FPS) / FPS;
 // rounded to 1 ns so frame boundaries do not depend on float noise (100 / 60 * 60 != 100)
@@ -426,7 +427,7 @@ function drawHeader(tm) {
   ctx.textAlign = 'right'; ctx.font = font(700, 22);
   ctx.fillText(fmtMs(clamp(tm, 0, TOTAL)), 1160, 40);
   ctx.font = font(400, 13); ctx.fillStyle = '#CFCFCF';
-  ctx.fillText(`${V.of} ${fmtMs(TOTAL)}  ·  ${V.video} = ${MS_PER_SEC} ms of ${V.trace}`, 1160, 62);
+  ctx.fillText(`${V.of} ${fmtMs(TOTAL)}  ·  ${V.video} = ${MS_PER_SEC} ms of ${V.trace}${OPT.gapNote ? `  ·  ${OPT.gapNote}` : ''}`, 1160, 62);
   ctx.textAlign = 'left'; ctx.fillStyle = C.ink2; ctx.font = font(400, 14);
   ctx.fillText(fitText(OPT.subtitle || `trace ${D.traceId}`, 1120), 40, 104);
 }
@@ -450,6 +451,31 @@ function drawLines(tm) {
   ctx.lineCap = 'round';
 }
 const spansAt = (n) => spans.filter((s) => nodeOf(s) === n.id);
+// station labels, laid out once. Request and agent maps label every station as before. CI maps with wide
+// matrices stack dozens of stations per column, so labels there are narrowed to the column spacing and placed
+// greedily (failed stations first, then map order, skipped last); a label that would overlap one already placed
+// is dropped. The station stays on the map and stays named in the side list and the panel.
+let LABELS = null;
+function labelPlan() {
+  if (LABELS) return LABELS;
+  LABELS = new Map();
+  const r = 9, colGap = L > 1 ? (G.right - G.left - NODE_W) / (L - 1) : Infinity;
+  const maxW = CI_STEPS ? Math.max(48, Math.min(150, colGap - 34)) : 150;
+  const tier = (n) => spansAt(n).some((s) => s.status === 'error') ? 0 : n.skipped ? 2 : 1;
+  const list = CI_STEPS ? order.slice().sort((a, b) => tier(a) - tier(b)) : order;
+  const boxes = CI_STEPS ? order.map((n) => [n.x - r - 2, n.y + n.top - r - 2, n.x + r + 2, n.y + n.bot + r + 2]) : [];
+  for (const n of list) {
+    const ly = n.y + n.top - r - 10;
+    ctx.font = font(700, 15); ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    const name = fitText(n.label || n.id, maxW), w = ctx.measureText(name).width;
+    const bx = n.x - (w + 22) / 2;
+    const box = [bx - 3, ly - 16, bx + w + 25, ly + 5];
+    if (CI_STEPS && boxes.some((q) => box[0] < q[2] && q[0] < box[2] && box[1] < q[3] && q[1] < box[3])) continue;
+    boxes.push(box);
+    LABELS.set(n, { name, bx, ly });
+  }
+  return LABELS;
+}
 function drawStations(tm) {
   for (const n of order) {
     const active = spansAt(n).some((s) => tm >= s.start && tm < s.end && showInStrip(s));
@@ -463,14 +489,13 @@ function drawStations(tm) {
     ctx.fill(); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
     if (active) { ctx.fillStyle = n.color; ctx.beginPath(); ctx.arc(n.x, n.y, 4.5, 0, 2 * Math.PI); ctx.fill(); }
     // label: bullet + name above the station
-    const ly = n.y + n.top - r - 10;
-    ctx.font = font(700, 15); ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
-    const name = fitText(n.label || n.id, 150), w = ctx.measureText(name).width;
-    const bx = n.x - (w + 22) / 2;
+    const lab = labelPlan().get(n);
     ctx.globalAlpha = n.skipped ? 0.28 : visited ? 1 : 0.35;
-    bullet(bx + 8, ly - 5, 8, n);
-    ctx.fillStyle = C.ink; ctx.font = font(700, 15); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(name, bx + 21, ly);
+    if (lab) {
+      bullet(lab.bx + 8, lab.ly - 5, 8, n);
+      ctx.fillStyle = C.ink; ctx.font = font(700, 15); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(lab.name, lab.bx + 21, lab.ly);
+    }
     if (n.skipped && CI_STEPS) { ctx.font = font(400, 10); ctx.fillStyle = C.ink2; ctx.textAlign = 'center'; ctx.fillText(V.skipped, n.x, n.y + n.bot + r + 13); }
     if (n.inferred) { ctx.font = font(400, 11); ctx.fillStyle = C.ink2; ctx.textAlign = 'center'; ctx.fillText(n.sub ? `${V.infrastructure} · ${n.sub}` : V.infrastructure, n.x, n.y + n.bot + r + 14); }
     ctx.globalAlpha = 1;
@@ -483,15 +508,39 @@ function shortReason(m) {
   const par = m.match(/\(([^()]{2,40})\)\s*$/); if (par) return par[1];
   const parts = m.split(/:\s+/); return parts[parts.length - 1];
 }
+// a leaf station's markers go to its right only if the widest of them (final value) stays on the stage;
+// otherwise they go to its left on the same row (seen on Jaeger HotROD and agent maps: leaves in the last column).
+const whyOf = (s) => fitText([s.attrs && (s.attrs['http.response.status_code'] || s.attrs['http.status_code']) ? 'HTTP ' + (s.attrs['http.response.status_code'] || s.attrs['http.status_code']) : '', shortReason(s.statusMessage) || s.name].filter(Boolean).join(' · '), 170);
+const FITS_RIGHT = new Map();
+function alertsFitRight(n) {
+  if (FITS_RIGHT.has(n)) return FITS_RIGHT.get(n);
+  const ciStep = (s) => !CI_STEPS || s.attrs && s.attrs['ci.step.number'] != null;
+  const f0 = ctx.font;   // measuring must not change the font state drawAlerts inherits
+  let w = 0;
+  for (const s of spansAt(n)) {
+    if (!ciStep(s)) continue;
+    if (s.slow) { ctx.font = font(700, 12); w = Math.max(w, ctx.measureText(`${V.delay}  ${fmtMs(s.duration)}`).width + 30); }
+    if (s.errOrigin) { ctx.font = font(700, 12); const a = ctx.measureText(V.serviceAlert).width + 34; ctx.font = font(400, 12); w = Math.max(w, a, ctx.measureText(whyOf(s)).width + 3); }
+  }
+  ctx.font = f0;
+  const fits = n.x + 18 + w <= STAGE.width - 8;
+  FITS_RIGHT.set(n, fits);
+  return fits;
+}
+const MAX_MARKERS = 3;
 function drawAlerts(tm) {
   for (const n of order) {
     // leaf stations: markers sit to the right, on the station's own row; otherwise below the station
-    const right = outE.get(n.id).length === 0 && !(CI_STEPS && n.x > 820);
-    let y = right ? n.y - 10 : n.y + n.bot + 9 + (n.inferred ? 20 : 8);
-    const ax = (w) => right ? n.x + 18 + w / 2 : n.x;
+    const leaf = outE.get(n.id).length === 0 && !(CI_STEPS && n.x > 820);
+    const right = leaf && alertsFitRight(n), left = leaf && !right;   // left: mirror image, for leaves near the right edge
+    let y = right || left ? n.y - 10 : n.y + n.bot + 9 + (n.inferred ? 20 : 8);
+    const ax = (w) => right ? n.x + 18 + w / 2 : left ? n.x - 18 - w / 2 : n.x;
     const ciStep = (s) => !CI_STEPS || s.attrs && s.attrs['ci.step.number'] != null;
-    const slow = spansAt(n).filter((s) => ciStep(s) && s.slow && tm >= s.slowAt);
-    const errs = spansAt(n).filter((s) => ciStep(s) && s.errOrigin && tm >= s.end);
+    let slow = spansAt(n).filter((s) => ciStep(s) && s.slow && tm >= s.slowAt);
+    let errs = spansAt(n).filter((s) => ciStep(s) && s.errOrigin && tm >= s.end);
+    // at most MAX_MARKERS per station (alerts first), then one "+N more" line; the side list has the rest
+    const extra = slow.length + errs.length - MAX_MARKERS;
+    if (extra > 0) { errs = errs.slice(0, MAX_MARKERS); slow = slow.slice(0, MAX_MARKERS - errs.length); }
     for (const s of slow) {
       const ms = Math.min(tm, s.end) - s.start;
       const txt = `${V.delay}  ${fmtMs(ms)}`;
@@ -503,16 +552,21 @@ function drawAlerts(tm) {
     }
     for (const s of errs) {
       const txt = V.serviceAlert;
-      const why = fitText([s.attrs && (s.attrs['http.response.status_code'] || s.attrs['http.status_code']) ? 'HTTP ' + (s.attrs['http.response.status_code'] || s.attrs['http.status_code']) : '', shortReason(s.statusMessage) || s.name].filter(Boolean).join(' · '), 170);
+      const why = whyOf(s);
       ctx.font = font(700, 12); const w = Math.max(ctx.measureText(txt).width + 34, 0);
       const cx = ax(w); rr(cx - w / 2, y, w, 20, 3); ctx.fillStyle = C.err; ctx.fill();
       ctx.fillStyle = '#fff'; ctx.beginPath(); const tx = cx - w / 2 + 12, ty = y + 10; ctx.moveTo(tx, ty - 6); ctx.lineTo(tx + 6, ty + 5); ctx.lineTo(tx - 6, ty + 5); ctx.closePath(); ctx.fill();
       ctx.fillStyle = C.err; ctx.font = font(700, 9); ctx.textAlign = 'center'; ctx.fillText('!', tx, ty + 2);
       ctx.fillStyle = '#fff'; ctx.font = font(700, 12); ctx.textAlign = 'left'; ctx.fillText(txt, cx - w / 2 + 24, y + 10.5);
-      ctx.font = font(400, 12); const ww = ctx.measureText(why).width, wx = right ? cx - w / 2 : cx - ww / 2;
+      ctx.font = font(400, 12); const ww = ctx.measureText(why).width, wx = right ? cx - w / 2 : left ? cx + w / 2 - ww : cx - ww / 2;
       ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.fillRect(wx - 3, y + 23, ww + 6, 15);
       ctx.fillStyle = C.err; ctx.textAlign = 'left'; ctx.fillText(why, wx, y + 34);
       y += 44;
+    }
+    if (extra > 0) {
+      ctx.font = font(700, 11); ctx.fillStyle = C.ink2; ctx.textBaseline = 'middle';
+      const more = `+${extra} ${V.more}`;
+      ctx.textAlign = right ? 'left' : left ? 'right' : 'center'; ctx.fillText(more, right ? n.x + 18 : left ? n.x - 18 : n.x, y + 6);
     }
   }
 }

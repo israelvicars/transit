@@ -173,4 +173,10 @@ t('X-Ray: bare segment docs, subsegments, namespaces, fault/error/throttle, in-p
   assert.throws(() => normalize({ TraceSummaries: [{ Id: tid }] }), /GetTraceSummaries/);
 });
 
+t('Jaeger v2 /api/v3 response: {result:{resourceSpans}} unwraps to the OTLP trip', () => {
+  const ot = normalize(load('otel-demo-checkout.otlp.json')), jg = normalize({ result: JSON.parse(load('otel-demo-checkout.otlp.json')) });
+  assert.equal(jg.meta.format, 'jaeger');
+  assert.deepEqual(jg.spans.map((s) => [s.spanId, s.parentId, s.service, s.start, s.duration]), ot.spans.map((s) => [s.spanId, s.parentId, s.service, s.start, s.duration]));
+});
+
 console.log(`${n} tests passed`);

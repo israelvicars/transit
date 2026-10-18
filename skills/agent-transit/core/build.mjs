@@ -12,6 +12,7 @@ import { pickAdapter } from './adapters.mjs';
 import { existsSync } from 'node:fs';
 import { matchTrace } from '../src/request-transit/contracts/match.mjs';
 import { resolveVocab } from './vocab.mjs';
+import { compressGaps, DEFAULT_MAX_GAP_MS } from './gaps.mjs';
 export const DEFAULT_INDEX = '.transit-cache/contracts/index.json';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -40,6 +41,16 @@ export function build(file, opt = {}) {
   const trace = adapter.normalize(doc, { format: adapter.format, traceId: opt['trace-id'], showArgs: !!opt['show-args'], maxSteps: opt['max-steps'] != null ? Number(opt['max-steps']) : undefined });
   redact(trace, opt.redact ? String(opt.redact).split(',') : [], !opt['no-default-redact']);
   const vizOpts = {};
+  // agent sessions and CI runs: shorten idle gaps (--max-gap-ms N, 0 or --no-compress-gaps to keep wall time)
+  const family = adapter.format === 'gh-actions' ? 'ci' : ['claude-code', 'codex', 'cursor'].includes(adapter.format) ? 'agent' : null;
+  if (family && !opt['no-compress-gaps']) {
+    const gaps = compressGaps(trace, opt['max-gap-ms'] != null ? Number(opt['max-gap-ms']) : DEFAULT_MAX_GAP_MS[family]);
+    if (gaps) {
+      trace.meta.gaps = gaps;
+      trace.meta.warnings.push(`shortened ${gaps.count} idle gap(s) longer than ${gaps.maxGapMs / 1000} s (${Math.round(gaps.removedMs / 1000)} s of wall time cut); pass --max-gap-ms 0 for wall time`);
+      vizOpts.gapNote = `${gaps.count} idle gap${gaps.count === 1 ? '' : 's'} shortened`;
+    }
+  }
   if (opt.title) vizOpts.title = opt.title;
   if (opt.subtitle) vizOpts.subtitle = opt.subtitle;
   if (opt['slow-ms']) vizOpts.slowMs = Number(opt['slow-ms']);
