@@ -30,6 +30,20 @@ export function redact(trace, keys = [], useDefault = true) {
   return trace;
 }
 
+// A request trace from one service (e.g. telemetrygen, a monolith) would draw one station and no hops.
+// Then stations become operations: each non-root span's service is its span name, with a trailing
+// counter or id dropped ("okey-dokey-7" -> "okey-dokey") so N numbered children share one station.
+export function splitSingleService(trace) {
+  const services = new Set(trace.spans.map((s) => s.service));
+  if (services.size !== 1 || trace.spans.length < 2) return false;
+  const svc = [...services][0];
+  const op = (name) => String(name || 'span').replace(/[\s._:#/-]*(\d+|[0-9a-f]{8,})$/i, '').slice(0, 40) || String(name);
+  const ops = new Set();
+  for (const s of trace.spans) if (s.parentId) { s.attrs = Object.assign({}, s.attrs, { 'service.name': svc }); s.service = op(s.name); ops.add(s.service); }
+  trace.meta.warnings.push(`single-service trace (${svc}): stations are operations (${ops.size} span name${ops.size === 1 ? '' : 's'})`);
+  return true;
+}
+
 export function build(file, opt = {}) {
   const input = readFileSync(file, 'utf8');
   let doc;
@@ -41,6 +55,7 @@ export function build(file, opt = {}) {
   const trace = adapter.normalize(doc, { format: adapter.format, traceId: opt['trace-id'], showArgs: !!opt['show-args'], maxSteps: opt['max-steps'] != null ? Number(opt['max-steps']) : undefined });
   redact(trace, opt.redact ? String(opt.redact).split(',') : [], !opt['no-default-redact']);
   const vizOpts = {};
+  if (!['gh-actions', 'claude-code', 'codex', 'cursor'].includes(adapter.format)) splitSingleService(trace);
   // agent sessions and CI runs: shorten idle gaps (--max-gap-ms N, 0 or --no-compress-gaps to keep wall time)
   const family = adapter.format === 'gh-actions' ? 'ci' : ['claude-code', 'codex', 'cursor'].includes(adapter.format) ? 'agent' : null;
   if (family && !opt['no-compress-gaps']) {

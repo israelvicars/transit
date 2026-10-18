@@ -151,3 +151,8 @@ Applied the box patch as aba3cc0. `npm run check` passes on the laptop; MP4 iden
 - Live: Jaeger v2.22 all-in-one + HotROD (40-span trace OK); telemetrygen → Jaeger (2001-span single trace, 3x20 error traces with links, 539 traces in one response, 12 MB attribute payload: all build <0.1 s, no page errors); Tempo 3.0 single-binary compose example (tempo+alloy+k6-tracing) + live `fetch.mjs tempo --find` and fetch-by-id. OTel Demo skipped: Docker VM 8 GB, disk 91% full. Containers removed.
 - Gates: npm run check passes; OTel MP4 sha256 223590ce… and GIF bed864e9… unchanged. Agent sample film changed (gap + left-placed alert), CI sample film unchanged.
 - Known, not fixed: single-service traces (telemetrygen) draw one station and an empty hop list; CI legend overflows past ~20 jobs.
+
+## 2026-10-18 single-service traces, CI legend overflow: done
+- core/build.mjs `splitSingleService`: request traces whose spans all share one service (telemetrygen, monoliths) use operations as stations: child span name with a trailing counter/id dropped ("okey-dokey-7" -> "okey-dokey"); real service kept in `service.name`; warning printed. Not applied to CI/agent. Test in core/test-gaps.mjs. telemetrygen 20-error trace now draws tg-err -> okey-dokey with 20 hops.
+- Template legend: if the 13 px legend needs more than 2 rows, it switches to compact 11 px labels and ends row 2 with "+N more" (vscode 38-job run: 12 shown + "+26 more", KEY row no longer overlapped). Normal legends take the original code path.
+- Gates: npm run check passes; OTel MP4 223590ce… / GIF bed864e9… unchanged; CI and agent sample films unchanged.

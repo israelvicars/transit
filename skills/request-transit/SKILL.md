@@ -84,6 +84,10 @@ Open `transit-out/<name>/transit.html` in a browser. Video renders hide all of t
 - MCP (interactive): if the AWS Labs CloudWatch Application Signals MCP server is connected, call `get_xray_trace`, save the result to a file, then use the file. Check the saved shape first; it has not been verified live.
 - X-Ray samples about 5% of requests by default, so a specific request may have no trace.
 
+## Single-service traces
+
+If every span comes from one service (a monolith, or `telemetrygen`), stations are operations instead: each child span is placed by its span name, with a trailing counter or id dropped so numbered spans share a station. The real service stays in the span's `service.name` attribute.
+
 ## Jaeger traces
 
 - File: Jaeger v2 serves OTLP JSON at `/api/v3/traces/<id>` (or `/api/v3/traces?query.service_name=...` for a search). Save the response and pass it straight to build/render; the `{result: ...}` wrapper is auto-detected as `jaeger`. A search response can hold many traces: the one with the most spans is used unless `--trace-id` is given.

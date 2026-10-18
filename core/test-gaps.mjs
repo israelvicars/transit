@@ -1,6 +1,7 @@
 // core/test-gaps.mjs: idle-gap compression keeps order, overlaps and activity durations; cuts only idle time.
 import assert from 'node:assert/strict';
 import { compressGaps } from './gaps.mjs';
+import { splitSingleService } from './build.mjs';
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('ok  ', name); };
 const mk = () => ({ meta: {}, spans: [
   { spanId: 'r', parentId: null, start: 0, duration: 100000, attrs: {} },
@@ -22,4 +23,16 @@ t('maxGap 0 or no long gaps: untouched', () => {
   const a = mk(); assert.equal(compressGaps(a, 0), null); assert.deepEqual(a, mk());
   const b = mk(); assert.equal(compressGaps(b, 1e9), null); assert.deepEqual(b, mk());
 });
-console.log(`${n} gap tests passed`);
+t('single-service request trace: stations become operations, numbered children share one', () => {
+  const tr = { meta: { warnings: [] }, spans: [
+    { spanId: 'r', parentId: null, service: 'mono', name: 'GET /cart', attrs: {} },
+    { spanId: 'a', parentId: 'r', service: 'mono', name: 'okey-dokey-0' }, { spanId: 'b', parentId: 'r', service: 'mono', name: 'okey-dokey-12' },
+    { spanId: 'c', parentId: 'a', service: 'mono', name: 'SELECT cart' },
+  ] };
+  assert.equal(splitSingleService(tr), true);
+  assert.deepEqual(tr.spans.map((s) => s.service), ['mono', 'okey-dokey', 'okey-dokey', 'SELECT cart']);
+  assert.equal(tr.spans[1].attrs['service.name'], 'mono');
+  const multi = { meta: { warnings: [] }, spans: [{ spanId: 'r', parentId: null, service: 'a' }, { spanId: 'x', parentId: 'r', service: 'b' }] };
+  assert.equal(splitSingleService(multi), false);
+});
+console.log(`${n} gap/build tests passed`);

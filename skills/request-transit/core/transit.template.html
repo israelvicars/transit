@@ -588,13 +588,32 @@ function drawLegend() {
   ctx.font = font(700, 11); ctx.fillStyle = C.ink2; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText('LINES', x, y); x += 50;
   const legendNodes = CI_STEPS ? lineKeys.map((key) => order.find((n) => n.lineId === key)).filter(Boolean) : order;
-  for (const n of legendNodes) {
-    const legendLabel = n.label || n.id;
-    ctx.font = font(400, 13); const w = ctx.measureText(legendLabel).width + 34;
-    if (x + w > 1170) { x = 90; y += 26; }
-    bullet(x + 9, y, 9, n);
-    ctx.fillStyle = C.ink; ctx.font = font(400, 13); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(legendLabel, x + 23, y + 1);
-    x += w + 8;
+  // two rows fit above KEY. If 13 px labels need more (CI runs with 20+ jobs), switch to compact 11 px labels
+  // and end the second row with "+N more"; the side list still names every line.
+  const rowsAt = (fs, pad) => { let xx = 90, rows = 1; for (const n of legendNodes) { ctx.font = font(400, fs); const w = ctx.measureText(n.label || n.id).width + pad; if (xx + w > 1170) { xx = 90; rows++; } xx += w + 8; } return rows; };
+  if (rowsAt(13, 34) <= 2) {
+    for (const n of legendNodes) {
+      const legendLabel = n.label || n.id;
+      ctx.font = font(400, 13); const w = ctx.measureText(legendLabel).width + 34;
+      if (x + w > 1170) { x = 90; y += 26; }
+      bullet(x + 9, y, 9, n);
+      ctx.fillStyle = C.ink; ctx.font = font(400, 13); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(legendLabel, x + 23, y + 1);
+      x += w + 8;
+    }
+  } else {
+    const moreTxt = (k) => `+${k} ${V.more}`;
+    const moreW = (k) => { ctx.font = font(700, 11); return ctx.measureText(moreTxt(k)).width + 8; };
+    let row = 0, i = 0;
+    for (; i < legendNodes.length; i++) {
+      const n = legendNodes[i];
+      ctx.font = font(400, 11); const lab = fitText(n.label || n.id, 240), w = ctx.measureText(lab).width + 26;
+      const left = legendNodes.length - i - 1, limit = () => row === 1 && left > 0 ? 1170 - moreW(left) : 1170;
+      if (x + w > limit()) { if (row === 1) break; x = 90; y += 26; row = 1; if (x + w > limit()) break; }
+      bullet(x + 7, y, 7, n);
+      ctx.fillStyle = C.ink; ctx.font = font(400, 11); ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(lab, x + 18, y + 1);
+      x += w + 6;
+    }
+    if (i < legendNodes.length) { ctx.font = font(700, 11); ctx.fillStyle = C.ink2; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(moreTxt(legendNodes.length - i), x, y + 1); }
   }
   x = 40; y += 28;
   ctx.font = font(400, 12); ctx.fillStyle = C.ink2;
