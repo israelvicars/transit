@@ -207,4 +207,21 @@ t('X-Ray: standalone subsegment documents (awsxray exporter shape) inherit the s
   assert.equal(by.b000000000000005.service, 'shipping'); assert.equal(by.b000000000000005.kind, 'server');
 });
 
+t('PostHog live shape: uppercase ids, zero root parent, error text from attributes (no status message in the API)', () => {
+  const sp = (id, parent, svc, name, kind, code, attributes) => ({ trace_id: 'AB'.repeat(16), span_id: id, parent_span_id: parent, name, kind, service_name: svc, status_code: code,
+    timestamp: '2026-10-18T16:46:29.000000Z', duration_nano: 1e6, attributes, resource_attributes: { 'service.name': svc } });
+  const tr = normalize({ results: [
+    sp('00000000000000A1', '0000000000000000', 'checkout', 'PlaceOrder', 2, 2, { 'rpc.response.status_code': 'INTERNAL' }),
+    sp('00000000000000A2', '00000000000000A1', 'payment', 'Charge', 2, 2, { 'error.type': 'Error', 'grpc.error_message': 'Payment request failed. Invalid token.' }),
+    sp('00000000000000A3', '00000000000000A1', 'frontend', 'GET', 3, 2, { 'http.response.status_code': 503 }),
+    sp('00000000000000A4', '00000000000000A2', 'payment', 'charge', 1, 2, { 'error.type': 'Error' }),
+  ], hasMore: false });
+  const by = Object.fromEntries(tr.spans.map((s) => [s.spanId, s]));
+  assert.equal(tr.meta.format, 'posthog'); assert.equal(by['00000000000000a1'].parentId, null);
+  assert.equal(by['00000000000000a1'].statusMessage, 'gRPC INTERNAL');
+  assert.equal(by['00000000000000a2'].statusMessage, 'Payment request failed. Invalid token.');
+  assert.equal(by['00000000000000a3'].statusMessage, 'HTTP 503');
+  assert.equal(by['00000000000000a4'].statusMessage, 'Payment request failed. Invalid token.');   // borrowed from its server span
+});
+
 console.log(`${n} tests passed`);

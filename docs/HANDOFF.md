@@ -174,3 +174,12 @@ Applied the box patch as aba3cc0. `npm run check` passes on the laptop; MP4 iden
   - splitSingleService skips traces that already have a distinct peer.
 - About 50 of the 19k spans are `unknown_service`: their parent segment was lost to capture timeouts.
 - Desktop: `~/Desktop/transit-examples/xray-otel-demo-shipping-error.gif`.
+
+## 2026-10-18 PostHog readback, live: done
+- A personal API key with `tracing:read` read the ingested OTel Demo payment-failure traces back from US Cloud. Each was 66 spans in one page; multi-page pagination is still unexercised. The `@current` project lookup works too.
+- Live shape: uppercase hex IDs, an all-zero root parent, integer kind/status_code, ISO timestamps plus `duration_nano`. **No OTel status message and no span events** are returned.
+- Fixes:
+  - The PostHog normalizer takes error text from attributes: `grpc.error_message`, `exception.message`, gRPC status name, HTTP status, `error.type`.
+  - An innermost error span with weak text borrows the message from its same-service server span, so the alert reads "Payment request failed. Invalid token…" instead of "Error".
+  - `fetch-posthog-api.mjs` also reads `POSTHOG_PERSONAL_API_KEY`, looks up the project via `@current` when `POSTHOG_PROJECT_ID` is unset (needs `project:read`), and hints at the cause on 401/403.
+- Desktop: `~/Desktop/transit-examples/posthog-payment-failure.gif`.

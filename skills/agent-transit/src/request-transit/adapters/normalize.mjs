@@ -209,6 +209,16 @@ function isoToNs(iso) {
   return sec + BigInt((m[2] || '').padEnd(9, '0').slice(0, 9) || '0');
 }
 const phParent = (p) => (!p || /^0+$/.test(p) || p === 'AAAAAAAAAAA=') ? null : otlpId(p);
+// PostHog's tracing API returns no OTel status message and no span events (checked live on US Cloud, 2026-10-18),
+// so the error text falls back to attributes the instrumentation sets: gRPC error message, exception message,
+// gRPC status name, HTTP status, error.type.
+function phStatusMessage(s, a) {
+  const direct = a['otel.status_description'] || s.status_message || a['exception.message'] || a['grpc.error_message'] || a['error.message'];
+  if (direct) return String(direct);
+  const rpc = a['rpc.response.status_code'] ?? a['rpc.grpc.status_code'], http = a['http.response.status_code'] ?? a['http.status_code'];
+  const parts = [rpc != null && rpc !== 'OK' && Number(rpc) !== 0 ? `gRPC ${rpc}` : '', http != null && Number(http) >= 400 ? `HTTP ${http}` : '', a['error.type'] || ''].filter(Boolean);
+  return parts.length ? parts.join(' · ') : undefined;
+}
 function fromPosthog(doc) {
   const raw = posthogSpans(doc).map((s) => {
     const a = s.attributes || {}, res = s.resource_attributes || {};
@@ -221,11 +231,18 @@ function fromPosthog(doc) {
       traceId: otlpId(s.trace_id), spanId: otlpId(s.span_id), parentId: phParent(s.parent_span_id),
       service: s.service_name || res['service.name'] || 'unknown_service', name: s.name || 'span', kind,
       startNs, endNs, status,
-      statusMessage: status === 'error' ? (a['otel.status_description'] || s.status_message || a['exception.message'] || undefined) : undefined,
+      statusMessage: status === 'error' ? phStatusMessage(s, a) : undefined,
       peer: (kind === 'client' || kind === 'producer') ? (a['peer.service'] || a['db.system'] && (a['server.address'] || a['db.system']) || a['messaging.system'] || undefined) : undefined,
       attrs: pick(a),
     };
   });
+  // the innermost failing span often carries only error.type while its server span in the same service has the
+  // text (e.g. payment "charge" vs "PaymentService/Charge"); the alert lands on the innermost one, so it borrows it
+  const byId = new Map(raw.map((s) => [s.spanId, s])), weak = (s) => !s.statusMessage || s.statusMessage === (s.attrs && s.attrs['error.type']) || !/\s/.test(s.statusMessage);
+  for (const s of raw) {
+    if (s.status !== 'error' || !weak(s)) continue;
+    for (let p = byId.get(s.parentId); p && p.service === s.service; p = byId.get(p.parentId)) if (p.status === 'error' && !weak(p)) { s.statusMessage = p.statusMessage; break; }
+  }
   if (doc && doc.hasMore) raw.warnings = ['input says hasMore=true: this is only the first page of spans; fetch every page'];
   return { raw, format: 'posthog', source: doc && doc._comment };
 }
