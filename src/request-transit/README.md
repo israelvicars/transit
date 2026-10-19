@@ -9,6 +9,7 @@ A public transit map for your requests.
 - “Animate this OTLP trace as a transit map: `./trace.json`.”
 - “Draw Datadog trace `4bf92f…` as a transit map and tell me where the delay is.”
 - “Make a GIF of trace `abc123` from Tempo for the incident doc.”
+- “Make a page I can drop in #incidents for this trace.”
 - “Render this AWS X-Ray trace as an MP4 and show me which call failed.”
 
 ## What it maps

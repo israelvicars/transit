@@ -16,10 +16,16 @@ A local subway map for one AI coding-agent session: tool families are lines and 
 ## Steps
 
 1. Find the newest local session path without reading its contents: `node <skill>/scripts/find-session.mjs --source claude-code|codex|cursor`.
-2. Build one map: `node <skill>/../../core/build.mjs <session.jsonl> --format claude-code --out ./transit-out/agent/transit.html --title "Agent: one coding session, tool by tool"`.
+2. Build one page to share: `node <skill>/../../core/build.mjs <session.jsonl> --format claude-code --share --title "Agent: one coding session, tool by tool"`.
+   Without `--out` the file is named after the title and the first failed tool call, in `./out/`, e.g. `out/agent-shell-git-service-alert.html`.
+   `--share` scrubs at the strict level, refuses `--no-scrub`, and opens the page paused on the first failed call with a one-line verdict above the map.
    Idle stretches with nothing running (e.g. model thinking time between tool calls) longer than 3 s are shortened to 3 s so the animation isn't dead air; the header says how many were shortened and the root span keeps the wall time as `transit.wall_ms`. Pass `--max-gap-ms N` to change the cap, or `--max-gap-ms 0` for true wall-clock timing.
-3. Share it with the bundled renderer: `node <skill>/../../core/render.mjs <session.jsonl> --format claude-code --name agent`.
-4. Check it with the bundled verifier: `node <skill>/../../core/verify.mjs <session.jsonl> --format claude-code --name agent`.
+3. Share the HTML file: give the user its path and the verdict line the build printed, ready to paste with the file in Slack
+   (desktop and iOS open it as the interactive page). Use the printed verdict as is. For example:
+   > shell · git failed: denied (SERVICE ALERT) after 12.0 s, 18 calls
+   > `agent-shell-git-service-alert.html` opens on the denied call. Only tool names and timing are in it.
+4. Optional teaser (GIF + MP4) with the bundled renderer: `node <skill>/../../core/render.mjs <session.jsonl> --format claude-code --name agent`.
+5. Check it with the bundled verifier: `node <skill>/../../core/verify.mjs <session.jsonl> --format claude-code --name agent`.
 
 Use `--format codex` or `--format cursor` for those sources.
 

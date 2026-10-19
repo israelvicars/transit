@@ -18,11 +18,17 @@ A public transit map for a GitHub Actions run.
 ## Steps
 
 1. **Get one run into a file.** Use `node <skill>/src/ci-transit/scripts/fetch.mjs <run-id> [--repo owner/name] [--out run.json]`, or `--last-failed [--workflow name] [--branch b]` instead of a run id for the newest failed run. It invokes the local `gh run list` / `gh run view` commands read-only. Runs with more than 150 steps show only failed or cancelled steps as stations; pass `--max-steps 0` to build/render to show all. Or provide a synthetic or previously saved run JSON file shaped like `gh run view --json ...`.
-2. **Build the interactive page:** `node <skill>/core/build.mjs <run.json> --format gh-actions --out ./transit-out/ci/transit.html --title "CI: one run" --subtitle "SYNTHETIC sample data"`.
+2. **Build the page to share:** `node <skill>/core/build.mjs <run.json> --format gh-actions --share --title "CI: one run" --subtitle "SYNTHETIC sample data"`.
+   Without `--out` the file is named after the title and the failing job, in `./out/`, e.g. `out/ci-test-node-22-service-alert.html`.
+   `--share` scrubs at the strict level, refuses `--no-scrub`, and opens the page paused on the first failed step with a one-line verdict above the map.
    Idle stretches with nothing running (e.g. queue waits between jobs) longer than 20 s are shortened to 20 s so the animation isn't dead air; the header says how many were shortened and the root span keeps the wall time as `transit.wall_ms`. Pass `--max-gap-ms N` to change the cap, or `--max-gap-ms 0` for true wall-clock timing.
-3. **Share it (MP4 + GIF):** `node <skill>/core/render.mjs <run.json> --format gh-actions --name ci --out-dir ./transit-out/ci --title "CI: one run" --subtitle "SYNTHETIC sample data"`.
-4. **Check it:** `node <skill>/core/verify.mjs <run.json> --format gh-actions --name ci`.
-5. Report slow steps, failed or cancelled steps, skipped jobs, and the job dependency map shown by the run.
+3. **Share it: the HTML file is the thing to share.** Give the user the file path and the verdict line the build printed, ready to paste,
+   and have them drag the file into Slack (desktop and iOS open it as the interactive page) or the PR. Use the printed verdict as is. For example:
+   > test (node 22) / Run unit tests failed: step failed: Run unit tests (SERVICE ALERT) after 6 min, 12 dependencies
+   > `ci-test-node-22-service-alert.html` opens on the failed step. Click any station for its timing.
+4. **Optional teaser (GIF + MP4):** `node <skill>/core/render.mjs <run.json> --format gh-actions --name ci --out-dir ./transit-out/ci --title "CI: one run" --subtitle "SYNTHETIC sample data"`.
+5. **Check it:** `node <skill>/core/verify.mjs <run.json> --format gh-actions --name ci`.
+6. Report slow steps, failed or cancelled steps, skipped jobs, and the job dependency map shown by the run.
 
 ## Rules
 
@@ -35,4 +41,4 @@ A public transit map for a GitHub Actions run.
 
 By default the run title (it is the PR or commit title) and the branch name are left out of the page, and values in
 job and step names and messages are scrubbed (emails, tokens, URL query strings...). Pass `--keep-ci-titles` to keep
-the title and branch, `--strict` for the stricter level. See request-transit's SKILL.md for the full list.
+the title and branch, `--strict` for the stricter level (`--share` uses it and refuses `--no-scrub`). See request-transit's SKILL.md for the full list.

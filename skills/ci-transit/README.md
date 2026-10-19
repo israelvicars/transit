@@ -9,6 +9,7 @@ A transit map for your CI runs.
 - “Show my last failed GitHub Actions run as a transit map.”
 - “Render run `1234567890` in `owner/repo` as an MP4.”
 - “Make a GIF of the latest CI run on `main` for the PR description.”
+- “Share my last failed run in Slack.”
 - “Map `./run.json` and tell me which step failed and which ones were slow.”
 
 ## What it maps

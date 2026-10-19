@@ -42,14 +42,22 @@ Every script checks its own prerequisites the first time (`<skill>/core/setup.mj
    For PostHog Distributed Tracing, call the PostHog MCP tool `apm-trace-get` (find ids with
    `query-apm-spans`), follow pages until `hasMore` is false, and save the JSON; headless,
    `node <skill>/src/request-transit/scripts/fetch.mjs posthog-api <trace_id>` (needs `POSTHOG_API_KEY` = a personal API key `phx_` with `tracing:read`; project tokens `phc_` and project secret keys `phs_` are rejected). See `<skill>/src/request-transit/references/adapters.md`.
-2. **Build the interactive page:** `node <skill>/core/build.mjs <trace.json> --out ./transit-out/<name>/transit.html --title "..."`.
-   Open it in a browser. `?t=4.5` freezes one frame.
-3. **Share it (MP4 + GIF):** `node <skill>/core/render.mjs <trace.json> --name <name> --out-dir ./transit-out/<name> --title "..."` writes
-   `anim.mp4`, `anim.gif`, `contact.png`. Needs `ffmpeg` and Playwright Chromium.
-4. **Check it:** `node <skill>/core/verify.mjs <trace.json> --name <name>` (two renders byte-identical,
+2. **Build the page to share:** `node <skill>/core/build.mjs <trace.json> --share --title "Checkout: one order"`.
+   Without `--out` the file is named after the title and the failing service, in `./out/`, e.g. `out/checkout-email-service-alert.html`
+   (`out/transit.html` when there is nothing to name it after). `--share` scrubs at the strict level, refuses `--no-scrub`, and makes
+   the page open paused on the first SERVICE ALERT with its hop in the side panel and a one-line verdict above the map.
+   Leave out `--share` for a page that autoplays from the start. `?t=4.5` freezes one frame.
+3. **Share it: the HTML file is the thing to share.** Give the user the file path and the verdict line the build printed
+   (`share: drop <path> into Slack. Suggested message: "..."`), ready to paste. They drag the file into Slack (desktop and iOS
+   open it as the interactive page), a PR or an incident doc. Use the printed verdict as is; never write your own. For example:
+   > email failed: Internal Server Error: failed to send order confirmation (SMTP timeout) (SERVICE ALERT) after 671 ms, 23 hops
+   > `checkout-email-service-alert.html` opens on the failing hop. Click any station for its timing and attributes.
+4. **Optional teaser (GIF + MP4):** for a feed post or a README, `node <skill>/core/render.mjs <trace.json> --name <name> --out-dir ./transit-out/<name> --title "..."` writes
+   `anim.mp4`, `anim.gif`, `contact.png`. Needs `ffmpeg` and Playwright Chromium. Post the HTML file alongside it for the details.
+5. **Check it:** `node <skill>/core/verify.mjs <trace.json> --name <name>` (two renders byte-identical,
    train timing, ffmpeg freeze/black gates). Then look at `contact.png` and two stills yourself
    before handing it over.
-5. Report what the map shows: slow hops (amber DELAY), error origins (red SERVICE ALERT with reason),
+6. Report what the map shows: slow hops (amber DELAY), error origins (red SERVICE ALERT with reason),
    and the hop table (every hop is listed as infrastructure or unmatched; none are hidden).
 
 ## Rules
@@ -63,8 +71,9 @@ Every script checks its own prerequisites the first time (`<skill>/core/setup.mj
   add more with `--redact key1,key2`. Payloads are never shown (tracers don't store them).
 - Values are scrubbed too, by default (safe to share): emails, bearer/JWT/known-prefix tokens, `password=`/`api_key=`
   style secrets, URL credentials and query strings, long hex/base64 secrets, UUIDs, home-directory names and AWS
-  account ids in ARNs, across service and span names, status messages and URLs. `--strict` (alias `--share`) also
-  removes IPs, internal host names, long numeric ids and all but a minimal attribute set. `--keep-uuids` keeps UUIDs;
+  account ids in ARNs, across service and span names, status messages and URLs. `--strict` also
+  removes IPs, internal host names, long numeric ids and all but a minimal attribute set. `--share` is `--strict` plus the
+  open-on-the-alert page and the verdict line, and it refuses `--no-scrub`. `--keep-uuids` keeps UUIDs;
   `--no-scrub` turns it off for local debugging only (the page then says not to share it).
 - Useful flags: `--slow-ms N`, `--ms-per-sec N`, `--target-seconds 9`, `--trace-id ID`, `--format otlp|datadog|datadog-v2|internal`.
 

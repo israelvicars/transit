@@ -8,6 +8,8 @@
 
 Transit is a local toolkit of Agent Skills that turns requests, CI runs, and coding-agent sessions into animated transit maps. Lines show the main unit of work, stations show individual events, DELAY marks slow work, and SERVICE ALERT marks an error or other failure.
 
+**Drop a trace in Slack.** Ask for a map to share and you get one self-contained HTML file named after what broke, like `checkout-email-service-alert.html`, plus a one-line verdict computed from the data and ready to paste: `email failed: Internal Server Error: failed to send order confirmation (SMTP timeout) (SERVICE ALERT) after 671 ms, 23 hops`. Drag the file into a channel. In Slack desktop and iOS it opens as the interactive page, paused on the failing hop with its details showing. GIF and MP4 are teasers for a feed post or a README.
+
 ## Example prompts
 
 Type these in Claude Code, Codex or Cursor once the skills are installed.
@@ -16,10 +18,12 @@ Type these in Claude Code, Codex or Cursor once the skills are installed.
 - "Animate this OTLP trace as a transit map: `./trace.json`"
 - "Draw Datadog trace 4bf92f… as a transit map and tell me where the delay is"
 - "Make a GIF of trace abc123 from Tempo for the incident doc"
+- "Make a page I can drop in #incidents for this trace: `./trace.json`"
 
 **ci-transit**
 - "Show my last failed GitHub Actions run as a transit map"
 - "Render run 1234567890 in owner/repo as an MP4"
+- "Share my last failed run in Slack"
 
 **agent-transit**
 - "Make an MP4 of my last Claude Code session"
@@ -67,9 +71,9 @@ Tool families are lines, tool calls are stations, and errors, denials, or long c
 
 | Output | What you get | Ask for it |
 | --- | --- | --- |
-| Interactive page | One self-contained HTML file. Works offline and makes no network requests. Play, scrub, click a station for details, scroll the list. | "…as a transit map" (default) |
-| GIF | A looping animation for docs, PRs and chat | "…as a GIF" |
-| MP4 | Deterministic and frame-exact: the same input gives byte-identical video every time | "…as an MP4" or "render a video" |
+| Interactive page | The thing to share. One self-contained HTML file to drop in Slack, a PR or an incident doc. Works offline and makes no network requests. Play, scrub, click a station for details, scroll the list. Built with `--share`, it is named after what failed and opens paused on the first SERVICE ALERT under a one-line verdict. | "…as a transit map" (default), "…to share in Slack" |
+| GIF | A looping teaser for docs, PRs and feeds. Share the HTML file when people need the details | "…as a GIF" |
+| MP4 | A teaser video. Deterministic and frame-exact: the same input gives byte-identical video every time | "…as an MP4" or "render a video" |
 
 GIF and MP4 also write a `contact.png` contact sheet. Video needs a local Chromium and ffmpeg; first-run setup reuses what you have and tells you before it downloads anything.
 
@@ -104,7 +108,7 @@ For Codex, use `$skill-installer install https://github.com/israelvicars/transit
 
 ## Privacy
 
-Transit is local only: no telemetry, no tracking, no analytics, and no network requests from a built page. Request data and traces stay on your machine. `agent-transit` keeps only tool names and timing by default, with additional metadata limited to what the skill documents.
+Transit is local only: no telemetry, no tracking, no analytics, and no network requests from a built page. Request data and traces stay on your machine. `agent-transit` keeps only tool names and timing by default, with additional metadata limited to what the skill documents. A shared page holds only the scrubbed trace data drawn on the map: `--share` uses the strict scrub level and refuses `--no-scrub`. Transit never uploads anything; sharing a file is up to you.
 
 ## Development
 
