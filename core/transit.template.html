@@ -115,11 +115,16 @@
   #help[hidden] { display: none; }
   #help div { background: #fff; padding: 22px 30px; border-radius: 8px; min-width: 380px; }
   #help td { padding: 4px 14px 4px 0; }
-  .render #controls, .render #hops, .render #panel, .render #help { display: none !important; }
+  .render #controls, .render #hops, .render #panel, .render #help, .render #verdict { display: none !important; }
+  /* --share pages: one verdict line above the map (data-derived, see core/verdict.mjs); the map gives up its height */
+  #verdict { flex: none; box-sizing: border-box; height: 34px; line-height: 34px; padding: 0 24px 0 18px; border-left: 6px solid #D42A1E; background: #F4F4F4; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #verdict[hidden] { display: none; }
+  html.share:not(.render) #main { width: min(calc(100vw - 400px), calc((100vh - 56px - 180px - 34px) * 4 / 3)); }
 </style>
 </head>
 <body>
 <div id="wrap"><div id="main">
+<div id="verdict" hidden></div>
 <canvas id="stage" width="1200" height="900"></canvas>
 <div id="controls">
   <button id="play"></button>
@@ -1059,10 +1064,15 @@ window.TRANSIT_UI = {
 };
 const want = !RENDER && (q.get('span') || q.get('pin') || (location.hash.match(/span=([^&]+)/) || [])[1]);
 renderPanel();
+// --share: open paused on the first SERVICE ALERT with its hop in the panel, under a one-line verdict
+const SHARE = !RENDER && OPT.share ? OPT.share : null;
+if (SHARE) { document.documentElement.classList.add('share'); const vb = document.getElementById('verdict'); vb.textContent = SHARE.verdict; vb.title = SHARE.verdict; vb.hidden = false; }
+const shareOrigin = SHARE && !want && !q.has('t') && SHARE.origin && byId.get(SHARE.origin);
 if (want && byId.has(decodeURIComponent(want))) select(byId.get(decodeURIComponent(want)), !q.has('t'));
+else if (shareOrigin) { const h = hops.find((c) => c.callee === shareOrigin || c.span === shareOrigin); setPlaying(false); select(h ? h.span : shareOrigin, false); show(tOfMs(shareOrigin.end)); }
 else show(T);
 if (document.fonts) document.fonts.ready.then(() => show(T));
-if (!RENDER && !q.has('t') && !q.has('paused') && !want) setPlaying(true);
+if (!RENDER && !q.has('t') && !q.has('paused') && !want && !shareOrigin) setPlaying(true);
 })();
 </script>
 </body>

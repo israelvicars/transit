@@ -5,6 +5,8 @@
 //        [--trace-id ID] [--title "..."] [--subtitle "..."] [--slow-ms N] [--ms-per-sec N]
 //        [--target-seconds 9] [--redact key1,key2] [--no-default-redact]
 //        [--strict | --share] [--keep-uuids] [--keep-ci-titles] [--no-scrub]   (value scrubbing, see core/scrub.mjs)
+//        --share: strict scrubbing, refuses --no-scrub, opens paused on the first SERVICE ALERT with a verdict headline.
+//        Without --out the file is out/<title>-<alert>-service-alert.html (see core/verdict.mjs), else out/transit.html.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +18,7 @@ import { resolveVocab } from './vocab.mjs';
 import { compressGaps, DEFAULT_MAX_GAP_MS } from './gaps.mjs';
 import { scrubTrace, scrubLevel } from './scrub.mjs';
 import { parseArgs, runCli, UserError } from './cli.mjs';
+import { verdict, defaultName } from './verdict.mjs';
 export const DEFAULT_INDEX = '.transit-cache/contracts/index.json';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -74,10 +77,13 @@ export function build(file, opt = {}) {
     if (e instanceof UserError) throw e;
     throw new UserError(`could not read ${file} as a trace: ${e.message}`);
   }
+  if (opt.share && (opt['no-scrub'] || opt.scrub === 'off')) throw new UserError('--share pages are meant to be dropped into Slack, so value scrubbing cannot be turned off: remove --no-scrub (or build without --share for local debugging)');
   redact(trace, opt.redact ? String(opt.redact).split(',') : [], !opt['no-default-redact']);
   scrubTrace(trace, scrubLevel(opt), adapter.format);
   const vizOpts = {};
   if (!['gh-actions', 'claude-code', 'codex', 'cursor'].includes(adapter.format)) splitSingleService(trace);
+  // the verdict's "after N" is wall time, so keep the start/end times from before gap shortening
+  const wallSpans = new Map(trace.spans.map((s) => [s.spanId, { start: s.start, duration: s.duration }]));
   // agent sessions and CI runs: shorten idle gaps (--max-gap-ms N, 0 or --no-compress-gaps to keep wall time)
   const family = adapter.format === 'gh-actions' ? 'ci' : ['claude-code', 'codex', 'cursor'].includes(adapter.format) ? 'agent' : null;
   if (family && !opt['no-compress-gaps']) {
@@ -97,6 +103,8 @@ export function build(file, opt = {}) {
   if (opt['target-seconds']) vizOpts.targetSeconds = Number(opt['target-seconds']);
   if (adapter.format === 'gh-actions') vizOpts.ciStepsAsStations = true;
   vizOpts.vocab = resolveVocab(opt.vocab || (adapter.format === 'gh-actions' ? 'ci' : adapter.format && ['claude-code', 'codex', 'cursor'].includes(adapter.format) ? 'agent' : undefined));
+  const v = verdict(trace, vizOpts.vocab, wallSpans);
+  if (opt.share) vizOpts.share = { verdict: v.text, origin: v.origin };
   // contracts are opt-in: only an explicit --contracts [index.json] reads an index, and it never builds one
   let contracts = null;
   if (opt.contracts) {
@@ -109,18 +117,19 @@ export function build(file, opt = {}) {
   const tpl = readFileSync(join(HERE, 'transit.template.html'), 'utf8');
   if (!tpl.includes('/*__TRACE_DATA__*/') || !tpl.includes('/*__FONTS__*/')) throw new Error('template placeholder missing');
   const html = tpl.replace('/*__FONTS__*/', () => face(400) + '\n  ' + face(700)).replace('/*__TRACE_DATA__*/', () => js);
-  const out = resolve(opt.out || 'out/transit.html');
+  const out = resolve(opt.out || join('out', defaultName(opt.title, v)));
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, html);
-  return { out, trace, contracts };
+  return { out, trace, contracts, verdict: v.text };
 }
 
 if (process.argv[1] && process.argv[1].endsWith('/build.mjs')) await runCli(async () => {
   await (await import('./setup.mjs')).ensureSetup({ need: [] });   // node version only; the HTML needs no deps
   const { opt, pos } = parseArgs(process.argv.slice(2));
   if (!pos[0]) throw new UserError('usage: node core/build.mjs <trace.json> [--out out/transit.html] [--title ...] [--strict]');
-  const { out, trace, contracts } = build(pos[0], opt);
+  const { out, trace, contracts, verdict: vt } = build(pos[0], opt);
   for (const w of trace.meta.warnings) console.error('warning:', w);
   const sc = trace.meta.scrub;
   console.log(`wrote ${out} (${trace.spans.length} spans, ${trace.meta.format}${trace.meta.synthetic ? ', synthetic' : ''}, ${trace.meta.redacted} attrs redacted, ${sc.level === 'off' ? 'value scrubbing OFF' : `${sc.values} values scrubbed (${sc.level})`}${contracts ? `, contracts: ${Object.values(contracts.bySpan).filter((m) => m.state === 'matched' || m.state === 'fallback').length} matched / ${Object.values(contracts.bySpan).filter((m) => m.state === 'unmatched').length} unmatched / ${Object.values(contracts.bySpan).filter((m) => m.state === 'infra').length} infra` : ''})`);
+  if (opt.share) console.log(`share: drop ${out} into Slack. Suggested message: "${vt}"`);
 });

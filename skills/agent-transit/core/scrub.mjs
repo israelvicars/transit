@@ -56,8 +56,8 @@ const STRICT_RULES = [
   ['internal-host', /\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:internal|local|lan|corp|intranet|svc|cluster\.local|home\.arpa)\b/gi, '[internal-host]'],
   ['long-id', /(?<![\w.])\d{6,}(?![\w.])/g, '[id]'],
 ];
-// attributes kept in --strict (values are still scrubbed)
-const STRICT_ATTRS = /^(http\.(request\.method|method|response\.status_code|status_code|route)|rpc\.(system|service|method|grpc\.status_code)|db\.system|messaging\.(system|operation)|ci\.(job|conclusion|needs|attempt|event)|agent\.source|component)$/;
+// attributes kept in --strict (values are still scrubbed); ci.step.* and ci.needs.from are structural: CI steps are stations only with them
+const STRICT_ATTRS = /^(http\.(request\.method|method|response\.status_code|status_code|route)|rpc\.(system|service|method|grpc\.status_code)|db\.system|messaging\.(system|operation)|ci\.(job|conclusion|needs|needs\.from|attempt|event|step\.number|step\.name)|agent\.source|component)$/;
 
 export function scrubLevel(opt = {}) {
   if (opt['no-scrub'] || opt.scrub === 'off') return { level: 'off' };
@@ -93,7 +93,10 @@ export function scrubTrace(trace, cfg = scrubLevel(), format) {
     for (const s of trace.spans) if (s.attrs) for (const k of ['ci.branch', 'ci.title', 'ci.head_sha', 'ci.actor']) if (k in s.attrs) { delete s.attrs[k]; counts['ci-meta'] = (counts['ci-meta'] || 0) + 1; }
   }
   for (const s of trace.spans) {
-    for (const k of ['service', 'name', 'peer', 'operation', 'statusMessage']) if (typeof s[k] === 'string') s[k] = str(s[k]);
+    // CI step stations are named by their own span id (job-<id>-step-<n>), which the page keeps anyway;
+    // scrubbing the id out of the name alone would merge every job's steps into one station
+    const stepStation = format === 'gh-actions' && s.service === s.spanId && /^job-\d+-step-\d+$/.test(s.service);
+    for (const k of ['service', 'name', 'peer', 'operation', 'statusMessage']) if (typeof s[k] === 'string' && !(k === 'service' && stepStation)) s[k] = str(s[k]);
     if (s.attrs) {
       for (const k of Object.keys(s.attrs)) {
         if (cfg.level === 'strict' && !STRICT_ATTRS.test(k)) { delete s.attrs[k]; counts['strict-attr'] = (counts['strict-attr'] || 0) + 1; continue; }
