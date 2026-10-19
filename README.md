@@ -73,6 +73,12 @@ Tool families are lines, tool calls are stations, and errors, denials, or long c
 
 GIF and MP4 also write a `contact.png` contact sheet. Video needs a local Chromium and ffmpeg; first-run setup reuses what you have and tells you before it downloads anything.
 
+### Side panel
+
+<img src="docs/panel.png" alt="Transit interactive page with the email hop selected: the side panel shows the path frontend-proxy, frontend, checkout, email, the client and server start, duration and self time, a red SERVICE ALERT reading Internal Server Error: failed to send order confirmation (SMTP timeout), and the server span's HTTP attributes" width="900">
+
+Click a station, train or line in the interactive page, or pause and press `N`, to open the side panel for that hop. It shows the stops the request took to get there, the client and server timing (start, duration and self time), the error message under a SERVICE ALERT when the hop failed, the span's attributes grouped by type, and its child spans. Sensitive-looking attribute keys are redacted when the page is built. If you built with `--contracts`, the panel also shows the expected request and response shapes. The panel is part of the interactive page: it runs locally and makes no network requests.
+
 ## Install
 
 Install all three skills for Claude Code, Codex, and Cursor:
