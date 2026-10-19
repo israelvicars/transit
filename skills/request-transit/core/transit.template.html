@@ -25,8 +25,11 @@
   /* interactive layout: page never scrolls; map scales to fit above a reserved 180px list area; hop table and panel body scroll on their own. #main needs an explicit height because #wrap uses align-items: flex-start (render mode), otherwise the list grows instead of scrolling. */
   html:not(.render), html:not(.render) body { height: 100%; overflow: hidden; }
   html:not(.render) #wrap { display: flex; height: 100vh; }
-  html:not(.render) #main { flex: 1; min-width: 0; height: 100vh; min-height: 0; align-self: stretch; display: flex; flex-direction: column; overflow: hidden; }
-  html:not(.render) #stage { flex: none; width: min(100%, calc((100vh - 56px - 180px) * 4 / 3)); height: auto; aspect-ratio: 1200 / 900; }
+  /* the map keeps its 4:3 aspect inside the height left above the list, so #main takes exactly the map's width and the panel takes the rest: header, map, controls and hop list share one right edge and there is no blank strip before the panel */
+  html:not(.render) #main { flex: none; width: min(calc(100vw - 400px), calc((100vh - 56px - 180px) * 4 / 3)); min-width: 0; height: 100vh; min-height: 0; align-self: stretch; display: flex; flex-direction: column; overflow: hidden; }
+  html:not(.render) #stage { flex: none; width: 100%; height: auto; aspect-ratio: 1200 / 900; }
+  html:not(.render) #panel { flex: 1; width: auto; min-width: 400px; }
+  #panel .pbody { container-type: inline-size; }
   html:not(.render) #controls { width: 100%; flex: none; }
   html:not(.render) #hops { width: 100%; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   #panel { display: flex; flex-direction: column; overflow: hidden; height: 100vh; }
@@ -66,9 +69,11 @@
   #panel .wf-parent { position: absolute; inset: 6px 0; background: #E7E7E7; border-radius: 2px; }
   #panel .wf-span { position: absolute; top: 0; height: 16px; min-width: 2px; border-radius: 3px; overflow: hidden; }
   #panel .wf-span i { position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,.6); }
-  #panel .wf-cap { display: flex; justify-content: space-between; font-size: 11px; color: #4A4A4A; }
-  #panel .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0 6px; }
-  #panel .stat { background: #F4F4F4; padding: 5px 6px; border-radius: 4px; }
+  #panel .wf-cap { display: flex; flex-direction: column; gap: 1px; font-size: 11px; color: #4A4A4A; }
+  #panel .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 10px 0 6px; }
+  @container (min-width: 560px) { #panel .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  #panel .stat { background: #F4F4F4; padding: 5px 8px; border-radius: 4px; min-width: 0; }
+  #panel .stat b { display: block; overflow-wrap: anywhere; }
   #panel .stat span { display: block; font-size: 10px; color: #4A4A4A; text-transform: uppercase; letter-spacing: .05em; }
   #panel .stat b { font-size: 12px; }
   #panel .status { margin: 4px 0; color: #4A4A4A; } #panel .status.err { color: #D42A1E; }
