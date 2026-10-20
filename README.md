@@ -10,6 +10,8 @@ Transit is a local toolkit of Agent Skills that turns requests, CI runs, and cod
 
 **Drop a trace in Slack.** Ask for a map to share and you get one self-contained HTML file named after what broke, like `checkout-email-service-alert.html`, plus a one-line verdict computed from the data and ready to paste: `email failed after 671 ms: SMTP timeout · SERVICE ALERT · 23 hops`. Drag the file into a channel. In Slack desktop and iOS it opens as the interactive page, paused on the failing hop with its details showing. GIF and MP4 are teasers for a feed post or a README.
 
+One line to install in all of your agents (`npx skills add israelvicars/transit -g -a claude-code -a codex -a cursor`) or [install skills separately](#install).
+
 ## Example prompts
 
 Type these in Claude Code, Codex or Cursor once the skills are installed.
