@@ -17,7 +17,7 @@ A local subway map for one AI coding-agent session: tool families are lines and 
 
 1. Find the newest local session path without reading its contents: `node <skill>/scripts/find-session.mjs --source claude-code|codex|cursor`.
 2. Build one page to share: `node <skill>/../../core/build.mjs <session.jsonl> --format claude-code --share --title "Agent: one coding session, tool by tool"`.
-   Without `--out` the file is named after the title and the first failed tool call, in `./out/`, e.g. `out/agent-shell-git-service-alert.html`.
+   Without `--out` the file is named after the title and the first failed tool call, in `./transit-out/`, e.g. `transit-out/agent-shell-git-service-alert.html`.
    `--share` scrubs at the strict level, refuses `--no-scrub`, and opens the page paused on the first failed call with a one-line verdict above the map.
    Idle stretches with nothing running (e.g. model thinking time between tool calls) longer than 3 s are shortened to 3 s so the animation isn't dead air; the header says how many were shortened and the root span keeps the wall time as `transit.wall_ms`. Pass `--max-gap-ms N` to change the cap, or `--max-gap-ms 0` for true wall-clock timing.
 3. Share the HTML file: give the user its path and the verdict line the build printed, ready to paste with the file in Slack

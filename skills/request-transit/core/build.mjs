@@ -1,12 +1,13 @@
 // core/build.mjs: trace file (OTLP JSON, Datadog span JSON, Datadog Spans API v2, or normalized)
 // -> one self-contained transit.html (trace, fonts and code inlined; no network at view time).
 //
-// usage: node core/build.mjs <trace.json> [--out out/transit.html] [--format otlp|datadog|datadog-v2|internal]
+// usage: node core/build.mjs <trace.json> [--share] [--out transit-out/transit.html] [--format otlp|datadog|datadog-v2|internal]
 //        [--trace-id ID] [--title "..."] [--subtitle "..."] [--slow-ms N] [--ms-per-sec N]
 //        [--target-seconds 9] [--redact key1,key2] [--no-default-redact]
 //        [--strict | --share] [--keep-uuids] [--keep-ci-titles] [--no-scrub]   (value scrubbing, see core/scrub.mjs)
 //        --share: strict scrubbing, refuses --no-scrub, opens paused on the first SERVICE ALERT with a verdict headline.
-//        Without --out the file is out/<title>-<alert>-service-alert.html (see core/verdict.mjs), else out/transit.html.
+//        Without --out the file is ./transit-out/<title>-<alert>-service-alert.html (see core/verdict.mjs), else
+//        ./transit-out/transit.html; an existing file is never overwritten (-2, -3, ... is added). --out is used as given.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +20,7 @@ import { compressGaps, DEFAULT_MAX_GAP_MS } from './gaps.mjs';
 import { scrubTrace, scrubLevel } from './scrub.mjs';
 import { parseArgs, runCli, UserError } from './cli.mjs';
 import { verdict, defaultName } from './verdict.mjs';
+const DEFAULT_DIR = 'transit-out';
 export const DEFAULT_INDEX = '.transit-cache/contracts/index.json';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -117,7 +119,9 @@ export function build(file, opt = {}) {
   const tpl = readFileSync(join(HERE, 'transit.template.html'), 'utf8');
   if (!tpl.includes('/*__TRACE_DATA__*/') || !tpl.includes('/*__FONTS__*/')) throw new Error('template placeholder missing');
   const html = tpl.replace('/*__FONTS__*/', () => face(400) + '\n  ' + face(700)).replace('/*__TRACE_DATA__*/', () => js);
-  const out = resolve(opt.out || join('out', defaultName(opt.title, v)));
+  // default: ./transit-out/ (the same folder the render teaser uses); never overwrite an earlier default file
+  let out = resolve(opt.out || join(DEFAULT_DIR, defaultName(opt.title, v)));
+  if (!opt.out) for (let i = 2; existsSync(out); i++) out = resolve(DEFAULT_DIR, defaultName(opt.title, v).replace(/\.html$/, `-${i}.html`));
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, html);
   return { out, trace, contracts, verdict: v.text };
@@ -126,7 +130,7 @@ export function build(file, opt = {}) {
 if (process.argv[1] && process.argv[1].endsWith('/build.mjs')) await runCli(async () => {
   await (await import('./setup.mjs')).ensureSetup({ need: [] });   // node version only; the HTML needs no deps
   const { opt, pos } = parseArgs(process.argv.slice(2));
-  if (!pos[0]) throw new UserError('usage: node core/build.mjs <trace.json> [--out out/transit.html] [--title ...] [--strict]');
+  if (!pos[0]) throw new UserError('usage: node core/build.mjs <trace.json> [--share] [--out transit-out/transit.html] [--title ...] [--strict]');
   const { out, trace, contracts, verdict: vt } = build(pos[0], opt);
   for (const w of trace.meta.warnings) console.error('warning:', w);
   const sc = trace.meta.scrub;

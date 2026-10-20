@@ -6,3 +6,5 @@ src/request-transit/references/design-system.md
 skills/*/node_modules/
 skills/*/.transit-cache/
 skills/*/out/
+transit-out/
+skills/*/transit-out/

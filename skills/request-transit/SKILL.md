@@ -43,8 +43,8 @@ Every script checks its own prerequisites the first time (`<skill>/core/setup.mj
    `query-apm-spans`), follow pages until `hasMore` is false, and save the JSON; headless,
    `node <skill>/src/request-transit/scripts/fetch.mjs posthog-api <trace_id>` (needs `POSTHOG_API_KEY` = a personal API key `phx_` with `tracing:read`; project tokens `phc_` and project secret keys `phs_` are rejected). See `<skill>/src/request-transit/references/adapters.md`.
 2. **Build the page to share:** `node <skill>/core/build.mjs <trace.json> --share --title "Checkout: one order"`.
-   Without `--out` the file is named after the title and the failing service, in `./out/`, e.g. `out/checkout-email-service-alert.html`
-   (`out/transit.html` when there is nothing to name it after). `--share` scrubs at the strict level, refuses `--no-scrub`, and makes
+   Without `--out` the file is named after the title and the failing service, in `./transit-out/`, e.g. `transit-out/checkout-email-service-alert.html`
+   (`transit-out/transit.html` when there is nothing to name it after; an existing file gets `-2`, `-3`, ... rather than being overwritten). `--share` scrubs at the strict level, refuses `--no-scrub`, and makes
    the page open paused on the first SERVICE ALERT with its hop in the side panel and a one-line verdict above the map.
    Leave out `--share` for a page that autoplays from the start. `?t=4.5` freezes one frame.
 3. **Share it: the HTML file is the thing to share.** Give the user the file path and the verdict line the build printed

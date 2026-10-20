@@ -63,7 +63,8 @@ export function shortReason(message, names = [], max = 40) {
 }
 
 function subjectOf(s, format) {
-  if (format === CI) return { label: `${s.attrs['ci.job']} / ${s.name}`, short: s.attrs['ci.job'] };
+  // a step without ci.job (hand-made or partial run JSON) falls back to its station, never 'undefined'
+  if (format === CI) { const job = (s.attrs && s.attrs['ci.job']) || s.service; return job && job !== s.name ? { label: `${job} / ${s.name}`, short: job } : { label: s.name, short: s.name }; }
   if (AGENT.includes(format)) return { label: s.name, short: s.name };
   return { label: s.service, short: s.service };
 }
@@ -88,10 +89,13 @@ export const slug = (s, max = 40) => String(s || '').normalize('NFKD').replace(/
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, max).replace(/-+$/, '');
 
 // "Checkout: one order through..." + email alert -> "checkout-email-service-alert"
+// Empty slug parts (e.g. CJK-only text) are dropped, so a name never starts with '-' (shells read that as a flag):
+// an alert with nothing nameable is "transit-service-alert".
 export function defaultName(title, v) {
   const t = String(title || '');
   const head = /[:–—|]/.test(t) ? t.split(/[:–—|]/)[0] : t.split(/\s+/).slice(0, 4).join(' ');
-  const parts = [slug(head, 32), v && v.subject ? slug(v.subject, 24) + '-service-alert' : ''].filter(Boolean);
-  const name = parts.join('-').replace(/-+/g, '-').slice(0, 80).replace(/-+$/, '');
+  const parts = [slug(head, 32), v && v.subject ? slug(v.subject, 24) : ''].filter(Boolean);
+  if (v && v.subject) parts.push(parts.length ? 'service-alert' : 'transit-service-alert');
+  const name = parts.join('-').replace(/-+/g, '-').replace(/^-+/, '').slice(0, 80).replace(/-+$/, '');
   return (name || 'transit') + '.html';
 }

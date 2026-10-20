@@ -17,7 +17,7 @@ A public transit map for a GitHub Actions run.
 
 1. **Get one run into a file.** Use `node <skill>/scripts/fetch.mjs <run-id> [--repo owner/name] [--out run.json]`, or `--last-failed [--workflow name] [--branch b]` instead of a run id for the newest failed run. It invokes the local `gh run list` / `gh run view` commands read-only. Runs with more than 150 steps show only failed or cancelled steps as stations; pass `--max-steps 0` to build/render to show all. Or provide a synthetic or previously saved run JSON file shaped like `gh run view --json ...`.
 2. **Build the page to share:** `node <skill>/../../core/build.mjs <run.json> --format gh-actions --share --title "CI: one run" --subtitle "SYNTHETIC sample data"`.
-   Without `--out` the file is named after the title and the failing job, in `./out/`, e.g. `out/ci-test-node-22-service-alert.html`.
+   Without `--out` the file is named after the title and the failing job, in `./transit-out/`, e.g. `transit-out/ci-test-node-22-service-alert.html`.
    `--share` scrubs at the strict level, refuses `--no-scrub`, and opens the page paused on the first failed step with a one-line verdict above the map.
    Idle stretches with nothing running (e.g. queue waits between jobs) longer than 20 s are shortened to 20 s so the animation isn't dead air; the header says how many were shortened and the root span keeps the wall time as `transit.wall_ms`. Pass `--max-gap-ms N` to change the cap, or `--max-gap-ms 0` for true wall-clock timing.
 3. **Share it: the HTML file is the thing to share.** Give the user the file path and the verdict line the build printed, ready to paste,
