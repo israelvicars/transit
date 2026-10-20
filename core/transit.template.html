@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Transit</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%9A%87%3C/text%3E%3C/svg%3E">
 <!-- Transit: self-contained subway-map view of one trace. No network. Every frame is a pure
@@ -9,6 +10,7 @@
 <style>
   /*__FONTS__*/
   html, body { margin: 0; background: #FFFFFF; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   body { font-family: "Transit Sans", Arial, sans-serif; color: #111; }
   #stage { display: block; width: 1200px; height: 900px; }
   #controls { width: 1200px; box-sizing: border-box; padding: 10px 24px 8px; display: flex; gap: 14px; align-items: center; font-size: 13px; }
@@ -120,6 +122,50 @@
   #verdict { flex: none; box-sizing: border-box; height: 34px; line-height: 34px; padding: 0 24px 0 18px; border-left: 6px solid #D42A1E; background: #F4F4F4; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #verdict[hidden] { display: none; }
   html.share:not(.render) #main { width: min(calc(100vw - 400px), calc((100vh - 56px - 180px - 34px) * 4 / 3)); }
+  /* phones (interactive only; render mode and desktop are untouched): the page scrolls, the map takes the full
+     width, the controls get 44px targets, and the side panel is a bottom sheet that only shows with a hop selected */
+  @media (max-width: 700px) {
+    html:not(.render), html:not(.render) body { height: auto; overflow: visible; }
+    html:not(.render) #wrap { display: block; height: auto; }
+    html:not(.render) #main, html.share:not(.render) #main { width: 100%; height: auto; overflow: visible; }
+    html:not(.render) #verdict { height: auto; line-height: 1.3; padding: 8px 14px 8px 12px; white-space: normal; font-size: 15px; }
+    html:not(.render) #controls { flex-wrap: wrap; gap: 8px 10px; padding: 10px 12px; font-size: 14px; }
+    html:not(.render) #controls button { min-height: 44px; min-width: 64px; }
+    html:not(.render) #speed button { min-width: 48px; }
+    html:not(.render) #controls input[type=range] { order: 3; flex: 1 0 100%; height: 44px; margin: 0; }
+    html:not(.render) #controls .t { order: 4; flex: 1 0 100%; min-width: 0; text-align: left; font-size: 12px; }
+    html:not(.render) #hops { flex: none; overflow: visible; overflow-x: auto; padding: 4px 12px 24px; }
+    html:not(.render) #panel { display: none; }
+    html.sel:not(.render) #panel { display: flex; position: fixed; left: 0; right: 0; bottom: 0; width: auto; min-width: 0; height: var(--sheet); z-index: 5; border-left: 0; border-top: 2px solid #111; background: #fff; box-shadow: 0 -6px 18px rgba(0,0,0,.18); }
+    html.sel:not(.render) body { padding-bottom: var(--sheet); }
+    /* the sheet starts just under the map (4:3 of the width plus the verdict line), never less than 42% of the screen */
+    html:not(.render) { --sheet: max(42vh, calc(100vh - 75vw - 70px)); }
+    @supports (height: 1dvh) { html:not(.render) { --sheet: max(42dvh, calc(100dvh - 75vw - 70px)); } }
+    #panel .sign { padding: 10px 12px 8px 16px; }
+    #panel .sign button { min-width: 44px; min-height: 44px; font-size: 28px; }
+    #panel .pbody { padding: 0 16px 24px; }
+    #panel a { padding: 12px 0; }
+    #panel .crumbs .stop { padding: 6px 0; min-height: 40px; min-width: 44px; }
+    #panel details summary { padding: 12px 0; }
+    #help div { min-width: 0; max-width: calc(100vw - 40px); padding: 16px; }
+  }
+  /* phones in landscape: the map fits the height, the panel slides over from the right */
+  @media (min-width: 701px) and (max-height: 500px) and (pointer: coarse) {
+    html:not(.render), html:not(.render) body { height: auto; overflow: visible; }
+    html:not(.render) #wrap { display: block; height: auto; }
+    html:not(.render) #main, html.share:not(.render) #main { width: min(100vw, calc((100vh - var(--vh, 0px)) * 4 / 3)); height: auto; overflow: visible; }
+    html.share:not(.render) { --vh: 34px; }
+    html:not(.render) #verdict { height: auto; line-height: 1.3; padding: 6px 14px 6px 12px; white-space: normal; }
+    html:not(.render) #controls button { min-height: 44px; }
+    html:not(.render) #controls input[type=range] { height: 44px; }
+    html:not(.render) #hops { flex: none; overflow: visible; }
+    html:not(.render) #panel { display: none; }
+    html.sel:not(.render) #panel { display: flex; position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 50vw); min-width: 0; height: auto; z-index: 5; background: #fff; box-shadow: -6px 0 18px rgba(0,0,0,.18); }
+    #panel .sign button { min-width: 44px; min-height: 44px; font-size: 28px; }
+    #panel a { padding: 12px 0; }
+    #panel .crumbs .stop { padding: 6px 0; min-height: 40px; min-width: 44px; }
+    #panel details summary { padding: 12px 0; }
+  }
 </style>
 </head>
 <body>
@@ -773,6 +819,8 @@ const q = new URLSearchParams(location.search);
 const RENDER = !!window.__RENDER_MODE;
 if (RENDER) document.documentElement.classList.add('render');
 const $ = (id) => document.getElementById(id);
+// touch-first devices (phones, tablets): tap hints instead of keyboard hints, roomier hit testing
+const TOUCH = !RENDER && !!(window.matchMedia && matchMedia('(hover: none) and (pointer: coarse)').matches);
 const scrub = $('scrub'), btn = $('play'), lab = $('tlabel');
 const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 scrub.max = SECONDS;
@@ -934,6 +982,8 @@ function breadcrumb(m) {
   return `<div class="crumbs">${html.join('<span class="seg"></span>')}</div>`;
 }
 function renderPanel() {
+  if (!RENDER) document.documentElement.classList.toggle('sel', !!sel);
+  if (!sel && TOUCH) { panel.innerHTML = `<div class="sign"><div class="st"><span class="sn">${V.transit}</span></div><div class="sub">${V.noHopSelected}</div></div><div class="pbody" tabindex="0"><div class="empty"><p>${V.inspectClick.replace(/^click/i, 'Tap')} ${V.inspectTail}</p></div></div>`; return; }
   if (!sel) { panel.innerHTML = `<div class="sign"><div class="st"><span class="sn">${V.transit}</span></div><div class="sub">${V.noHopSelected}</div></div><div class="pbody" tabindex="0"><div class="empty"><p>${V.inspectHop} <kbd>N</kbd>, ${V.or} ${V.inspectClick} ${V.inspectTail}</p></div><h3>${V.shortcuts}</h3>` + document.querySelector('#help table').outerHTML + '</div>'; return; }
   const m = hopModel(sel), s = m.main, n = m.node;
   const ch = kids.get(s.spanId).slice().sort((a, b) => a.start - b.start);
@@ -982,12 +1032,18 @@ panel.addEventListener('click', (ev) => {
   if (ev.target.id === 'pclose') select(null, false);
 });
 // ---- canvas hit testing (in CSS px of the 1200x900 stage)
-function hitTest(x, y) {
+function hitTest(x, y, tol = 16) {
   const tm = traceMsAt(T);
+  // touch: a finger is ~44 CSS px wide, so take the nearest station within reach before anything else
+  if (tol > 16) {
+    let near = null, nd = tol;
+    for (const n of order) { const d = Math.hypot(n.x - x, clamp(y, n.y + n.top, n.y + n.bot) - y); if (d < nd) { nd = d; near = n; } }
+    if (near) return { type: 'station', node: near };
+  }
   // trains first: they sit on top
   for (const tr of calls.map((c) => trainFor(c, tm)).filter(Boolean)) {
     const p = at(tr.e.path, tr.p * tr.e.path.len);
-    if (Math.hypot(p.x - x, p.y - y) < 16) return { type: 'train', call: tr.c };
+    if (Math.hypot(p.x - x, p.y - y) < tol) return { type: 'train', call: tr.c };
   }
   for (const n of order) {
     if (x > n.x - 16 && x < n.x + 16 && y > n.y + n.top - 16 && y < n.y + n.bot + 16) return { type: 'station', node: n };
@@ -1012,7 +1068,8 @@ function hitTest(x, y) {
 }
 function onCanvasClick(ev) {
   const r = cv.getBoundingClientRect();
-  const h = hitTest((ev.clientX - r.left) * STAGE.width / r.width, (ev.clientY - r.top) * STAGE.height / r.height);
+  const touch = TOUCH || ev.pointerType === 'touch';
+  const h = hitTest((ev.clientX - r.left) * STAGE.width / r.width, (ev.clientY - r.top) * STAGE.height / r.height, touch ? Math.max(16, 22 * STAGE.width / r.width) : 16);
   if (!h) { setPlaying(!playing, true); return; }
   if (h.call) return selectHop(h.call);
   const n = h.node, tm = traceMsAt(T);
