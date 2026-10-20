@@ -1066,7 +1066,7 @@ const want = !RENDER && (q.get('span') || q.get('pin') || (location.hash.match(/
 renderPanel();
 // --share: open paused on the first SERVICE ALERT with its hop in the panel, under a one-line verdict
 const SHARE = !RENDER && OPT.share ? OPT.share : null;
-if (SHARE) { document.documentElement.classList.add('share'); const vb = document.getElementById('verdict'); vb.textContent = SHARE.verdict; vb.title = SHARE.verdict; vb.hidden = false; }
+if (SHARE) { document.documentElement.classList.add('share'); const vb = document.getElementById('verdict'); vb.textContent = SHARE.verdict; vb.title = SHARE.message ? `${SHARE.verdict}\n${SHARE.message}` : SHARE.verdict; vb.hidden = false; }
 const shareOrigin = SHARE && !want && !q.has('t') && SHARE.origin && byId.get(SHARE.origin);
 if (want && byId.has(decodeURIComponent(want))) select(byId.get(decodeURIComponent(want)), !q.has('t'));
 else if (shareOrigin) { const h = hops.find((c) => c.callee === shareOrigin || c.span === shareOrigin); setPlaying(false); select(h ? h.span : shareOrigin, false); show(tOfMs(shareOrigin.end)); }

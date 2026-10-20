@@ -8,7 +8,7 @@
 
 Transit is a local toolkit of Agent Skills that turns requests, CI runs, and coding-agent sessions into animated transit maps. Lines show the main unit of work, stations show individual events, DELAY marks slow work, and SERVICE ALERT marks an error or other failure.
 
-**Drop a trace in Slack.** Ask for a map to share and you get one self-contained HTML file named after what broke, like `checkout-email-service-alert.html`, plus a one-line verdict computed from the data and ready to paste: `email failed: Internal Server Error: failed to send order confirmation (SMTP timeout) (SERVICE ALERT) after 671 ms, 23 hops`. Drag the file into a channel. In Slack desktop and iOS it opens as the interactive page, paused on the failing hop with its details showing. GIF and MP4 are teasers for a feed post or a README.
+**Drop a trace in Slack.** Ask for a map to share and you get one self-contained HTML file named after what broke, like `checkout-email-service-alert.html`, plus a one-line verdict computed from the data and ready to paste: `email failed after 671 ms: SMTP timeout · SERVICE ALERT · 23 hops`. Drag the file into a channel. In Slack desktop and iOS it opens as the interactive page, paused on the failing hop with its details showing. GIF and MP4 are teasers for a feed post or a README.
 
 ## Example prompts
 

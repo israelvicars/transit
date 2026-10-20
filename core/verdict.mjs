@@ -40,7 +40,27 @@ export const fmtMs = (ms) => {
   const sec = Math.round(ms / 1000), m = Math.floor(sec / 60), r = sec % 60;
   return m < 60 ? `${m} min${r ? ` ${r} s` : ''}` : `${Math.floor(m / 60)} h ${m % 60} min`;
 };
-const oneLine = (s, max) => { const t = String(s).replace(/\s+/g, ' ').trim(); return t.length > max ? t.slice(0, max - 1).trimEnd() + '…' : t; };
+const clean = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+// cut at a word boundary, never mid-word
+const cut = (t, max) => { if (t.length <= max) return t; const w = t.slice(0, max).replace(/\s+\S*$/, ''); return (w || t.slice(0, max)).replace(/[\s,;:.-]+$/, '') + '…'; };
+
+// the short cause for the verdict line; the full message stays in the panel and the line's tooltip.
+// "Internal Server Error: failed to send order confirmation (SMTP timeout)" -> "SMTP timeout"
+// "error: connect ECONNREFUSED 10.0.0.1:5432" -> "connect ECONNREFUSED 10.0.0.1:5432"
+// returns '' when the message only repeats the station's own name ("step failed: Run unit tests")
+export function shortReason(message, names = [], max = 40) {
+  let t = clean(message);
+  if (!t) return '';
+  const paren = t.match(/\(([^()]{2,48})\)\s*\.?$/);
+  if (paren) t = paren[1].trim();
+  else if (t.length > max) {
+    const parts = t.split(/:\s+/).filter(Boolean);
+    if (parts.length > 1) t = parts[parts.length - 1];
+  }
+  const low = t.toLowerCase().replace(/^(step|job|tool|call)?\s*failed:?\s*/, '');
+  if (!low || names.some((n) => n && clean(n).toLowerCase() === low)) return '';
+  return cut(t, max);
+}
 
 function subjectOf(s, format) {
   if (format === CI) return { label: `${s.attrs['ci.job']} / ${s.name}`, short: s.attrs['ci.job'] };
@@ -55,11 +75,12 @@ export function verdict(trace, vocab = {}, wall = null) {
   const hops = countHops(trace), noun = vocab.hopNounPlural || 'hops', alert = vocab.serviceAlert || 'SERVICE ALERT';
   const t0 = Math.min(...trace.spans.map((s) => W(s).start)), t1 = Math.max(...trace.spans.map((s) => W(s).start + W(s).duration));
   const o = errorOrigin(trace);
-  if (!o) return { text: `no ${alert}: ${hops} ${noun} in ${fmtMs(t1 - t0)}`, origin: null, subject: null };
+  if (!o) return { text: `no ${alert} · ${hops} ${noun} in ${fmtMs(t1 - t0)}`, origin: null, subject: null, message: null };
   const sub = subjectOf(o, format);
+  const reason = shortReason(o.statusMessage, [o.name, o.service, sub.label]);
   return {
-    text: `${sub.label} failed: ${oneLine(o.statusMessage || 'error', 100)} (${alert}) after ${fmtMs(W(o).start - t0)}, ${hops} ${noun}`,
-    origin: o.spanId, subject: sub.short,
+    text: `${sub.label} failed after ${fmtMs(W(o).start - t0)}${reason ? `: ${reason}` : ''} · ${alert} · ${hops} ${noun}`,
+    origin: o.spanId, subject: sub.short, message: clean(o.statusMessage) || null,
   };
 }
 

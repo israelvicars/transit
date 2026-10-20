@@ -49,8 +49,8 @@ Every script checks its own prerequisites the first time (`<skill>/core/setup.mj
    Leave out `--share` for a page that autoplays from the start. `?t=4.5` freezes one frame.
 3. **Share it: the HTML file is the thing to share.** Give the user the file path and the verdict line the build printed
    (`share: drop <path> into Slack. Suggested message: "..."`), ready to paste. They drag the file into Slack (desktop and iOS
-   open it as the interactive page), a PR or an incident doc. Use the printed verdict as is; never write your own. For example:
-   > email failed: Internal Server Error: failed to send order confirmation (SMTP timeout) (SERVICE ALERT) after 671 ms, 23 hops
+   open it as the interactive page), a PR or an incident doc. Use the printed verdict as is; never write your own. It carries a short cause; the full error message stays in the side panel and the verdict line's tooltip. For example:
+   > email failed after 671 ms: SMTP timeout · SERVICE ALERT · 23 hops
    > `checkout-email-service-alert.html` opens on the failing hop. Click any station for its timing and attributes.
 4. **Optional teaser (GIF + MP4):** for a feed post or a README, `node <skill>/core/render.mjs <trace.json> --name <name> --out-dir ./transit-out/<name> --title "..."` writes
    `anim.mp4`, `anim.gif`, `contact.png`. Needs `ffmpeg` and Playwright Chromium. Post the HTML file alongside it for the details.

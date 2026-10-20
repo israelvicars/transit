@@ -104,7 +104,7 @@ export function build(file, opt = {}) {
   if (adapter.format === 'gh-actions') vizOpts.ciStepsAsStations = true;
   vizOpts.vocab = resolveVocab(opt.vocab || (adapter.format === 'gh-actions' ? 'ci' : adapter.format && ['claude-code', 'codex', 'cursor'].includes(adapter.format) ? 'agent' : undefined));
   const v = verdict(trace, vizOpts.vocab, wallSpans);
-  if (opt.share) vizOpts.share = { verdict: v.text, origin: v.origin };
+  if (opt.share) vizOpts.share = { verdict: v.text, origin: v.origin, message: v.message };
   // contracts are opt-in: only an explicit --contracts [index.json] reads an index, and it never builds one
   let contracts = null;
   if (opt.contracts) {

@@ -38,7 +38,8 @@ for (const pg of pages) {
       const R = (s) => { const el = document.querySelector(s); if (!el) return null; const r = el.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height }; };
       const st = window.TRANSIT_UI.state(), call = st.hop >= 0 ? window.VIZ.calls.find((c) => c.spanId === window.TRANSIT_UI.hops[st.hop].spanId) : null;
       const v = document.getElementById('verdict');
-      return { st, call, share: window.VIZ_OPTS.share, verdict: v.hidden ? null : v.textContent, cut: v.scrollWidth > v.clientWidth,
+      const title = v.title;
+      return { st, call, share: window.VIZ_OPTS.share, verdict: v.hidden ? null : v.textContent, title, cut: v.scrollWidth > v.clientWidth,
         panel: document.getElementById('panel').innerText, rv: R('#verdict'), rs: R('#stage'), rc: R('#controls'), rp: R('#panel'),
         overflowX: document.documentElement.scrollWidth > innerWidth, cls: document.documentElement.className,
         calls: window.VIZ.calls.length, alertAt: window.VIZ.frameOfTraceMs };
@@ -53,9 +54,10 @@ for (const pg of pages) {
     if (pg.to) ok(m.call && m.call.to === pg.to, `${tag}: alert hop goes to ${pg.to}`);
     ok(/SERVICE ALERT/.test(m.panel), `${tag}: panel open on the alert`);
     ok(m.verdict && m.verdict === m.share.verdict && m.verdict === tip, `${tag}: verdict line matches the console tip`);
-    ok(/SERVICE ALERT/.test(m.verdict || '') && m.verdict.endsWith(`, ${m.calls} ${pg.label === 'ci' ? 'dependencies' : pg.label === 'agent' ? 'calls' : 'hops'}`), `${tag}: verdict hop count = page hop count (${m.calls})`);
+    ok(/SERVICE ALERT/.test(m.verdict || '') && m.verdict.endsWith(` · ${m.calls} ${pg.label === 'ci' ? 'dependencies' : pg.label === 'agent' ? 'calls' : 'hops'}`), `${tag}: verdict hop count = page hop count (${m.calls})`);
     ok(m.rv && m.rv.top >= 0 && m.rv.bottom <= m.rs.top + 1 && m.rv.height >= 20 && m.rv.height <= 40, `${tag}: one verdict line above the map`);
-    ok(!m.cut || w < 1600, `${tag}: verdict not truncated at this width${m.cut ? ' (ellipsis)' : ''}`);
+    ok(!m.cut, `${tag}: verdict fits on one line without an ellipsis`);
+    ok(m.title.startsWith(m.verdict) && (!m.share.message || m.title.endsWith(m.share.message)), `${tag}: tooltip carries the full message`);
     ok(Math.abs(m.rv.right - m.rs.right) <= 1 && Math.abs(m.rc.right - m.rs.right) <= 1 && m.rs.right <= m.rp.left + 1, `${tag}: verdict, map and controls share the panel edge`);
     ok(m.rc.bottom <= h + 1 || m.rs.bottom <= h, `${tag}: map fits the viewport height`);
     ok(!m.overflowX, `${tag}: no horizontal overflow`);

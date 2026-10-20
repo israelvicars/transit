@@ -22,7 +22,7 @@ A local subway map for one AI coding-agent session: tool families are lines and 
    Idle stretches with nothing running (e.g. model thinking time between tool calls) longer than 3 s are shortened to 3 s so the animation isn't dead air; the header says how many were shortened and the root span keeps the wall time as `transit.wall_ms`. Pass `--max-gap-ms N` to change the cap, or `--max-gap-ms 0` for true wall-clock timing.
 3. Share the HTML file: give the user its path and the verdict line the build printed, ready to paste with the file in Slack
    (desktop and iOS open it as the interactive page). Use the printed verdict as is. For example:
-   > shell · git failed: denied (SERVICE ALERT) after 12.0 s, 18 calls
+   > shell · git failed after 12.0 s: denied · SERVICE ALERT · 18 calls
    > `agent-shell-git-service-alert.html` opens on the denied call. Only tool names and timing are in it.
 4. Optional teaser (GIF + MP4) with the bundled renderer: `node <skill>/../../core/render.mjs <session.jsonl> --format claude-code --name agent`.
 5. Check it with the bundled verifier: `node <skill>/../../core/verify.mjs <session.jsonl> --format claude-code --name agent`.

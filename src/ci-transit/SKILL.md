@@ -22,7 +22,7 @@ A public transit map for a GitHub Actions run.
    Idle stretches with nothing running (e.g. queue waits between jobs) longer than 20 s are shortened to 20 s so the animation isn't dead air; the header says how many were shortened and the root span keeps the wall time as `transit.wall_ms`. Pass `--max-gap-ms N` to change the cap, or `--max-gap-ms 0` for true wall-clock timing.
 3. **Share it: the HTML file is the thing to share.** Give the user the file path and the verdict line the build printed, ready to paste,
    and have them drag the file into Slack (desktop and iOS open it as the interactive page) or the PR. Use the printed verdict as is. For example:
-   > test (node 22) / Run unit tests failed: step failed: Run unit tests (SERVICE ALERT) after 6 min, 12 dependencies
+   > test (node 22) / Run unit tests failed after 6 min · SERVICE ALERT · 12 dependencies
    > `ci-test-node-22-service-alert.html` opens on the failed step. Click any station for its timing.
 4. **Optional teaser (GIF + MP4):** `node <skill>/../../core/render.mjs <run.json> --format gh-actions --name ci --out-dir ./transit-out/ci --title "CI: one run" --subtitle "SYNTHETIC sample data"`.
 5. **Check it:** `node <skill>/../../core/verify.mjs <run.json> --format gh-actions --name ci`.
