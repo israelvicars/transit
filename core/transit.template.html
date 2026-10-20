@@ -1015,7 +1015,8 @@ function select(s, jump = true) {
   if (sel && jump) { setPlaying(false); show(tOfMs(sel.start)); } else show(T);
   renderPanel();
   const h = sel ? `#span=${encodeURIComponent(sel.spanId)}` : ' ';
-  try { history.replaceState(null, '', location.pathname + location.search + h); } catch (e) { /* file:// in some browsers */ }
+  // absolute URL: a relative one resolves against <base href> when a previewer injects one (htmlpreview.github.io), crossing origins
+  try { history.replaceState(null, '', location.href.split('#')[0] + h); } catch (e) { /* file:// in some browsers */ }
 }
 const selectHop = (c) => c && select(c.span);
 function stepHop(dir) {
